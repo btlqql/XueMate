@@ -1,0 +1,50 @@
+{
+  "tone": "friendly",
+  "pronoun": "you-only",
+  "headingStyle": "all-lowercase",
+  "headingLengthClass": "tight",
+  "ctaVerbs": [
+    {
+      "value": "site",
+      "count": 1
+    },
+    {
+      "value": "i",
+      "count": 1
+    },
+    {
+      "value": "try",
+      "count": 1
+    }
+  ],
+  "buttonPatterns": [
+    {
+      "value": "site language: english",
+      "count": 1
+    },
+    {
+      "value": "i already have an account",
+      "count": 1
+    },
+    {
+      "value": "try 1 week free",
+      "count": 1
+    }
+  ],
+  "sampleHeadings": [
+    "The free, fun, and effective way to learn a language!",
+    "free. fun. effective.",
+    "backed by science",
+    "stay motivated",
+    "personalized learning",
+    "learn anytime, anywhere",
+    "free. fun. effective.",
+    "backed by science",
+    "stay motivated",
+    "personalized learning"
+  ],
+  "stats": {
+    "buttons": 3,
+    "headings": 22
+  }
+}

@@ -1,0 +1,223 @@
+<script setup>
+import { ref } from 'vue'
+
+const courseName = ref('')
+const generating = ref(false)
+const outline = ref(null)
+const error = ref('')
+
+const generateOutline = async () => {
+  if (!courseName.value.trim()) return
+  generating.value = true
+  error.value = ''
+  outline.value = null
+
+  const result = await window.llm.generateReview(courseName.value)
+
+  if (result.success) {
+    try {
+      outline.value = JSON.parse(result.data)
+    } catch {
+      error.value = '解析结果格式异常，请重试'
+    }
+  } else {
+    error.value = result.error || '请求失败'
+  }
+  generating.value = false
+}
+</script>
+
+<template>
+  <div class="fade-in">
+    <div class="page-header">
+      <h1 class="page-title">复习总结</h1>
+      <p class="page-desc">生成复习提纲和重点清单，高效备考</p>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">课程信息</h2>
+      <div class="input-bar">
+        <input v-model="courseName" class="input" placeholder="输入课程名称，如：数据结构" />
+        <button class="btn btn-primary" @click="generateOutline" :disabled="generating">
+          {{ generating ? '生成中...' : '生成提纲' }}
+        </button>
+      </div>
+      <div class="error-msg" v-if="error">{{ error }}</div>
+    </div>
+
+    <template v-if="outline">
+      <div class="outline-layout">
+        <div class="card">
+          <h2 class="section-title">{{ outline.course }} 复习提纲</h2>
+          <div class="chapter-list">
+            <div v-for="(ch, i) in outline.chapters" :key="i" class="chapter-item">
+              <div class="chapter-header">
+                <span class="chapter-title">{{ ch.title }}</span>
+                <span class="freq">
+                  <span v-for="n in 5" :key="n" class="freq-dot" :class="{ active: n <= ch.freq }"></span>
+                </span>
+              </div>
+              <div class="points">
+                <span v-for="(p, j) in ch.points" :key="j" class="point-tag">{{ p }}</span>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="result-label">复习建议</h3>
+          <div class="tips-list">
+            <div v-for="(tip, i) in outline.tips" :key="i" class="tip-item">{{ tip }}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">7天复习计划</h2>
+          <div class="plan-list">
+            <div class="plan-item"><span class="plan-day">1-2</span><span>基础概念 + 简单题</span></div>
+            <div class="plan-item"><span class="plan-day">3-4</span><span>重点章节 + 习题</span></div>
+            <div class="plan-item"><span class="plan-day">5-6</span><span>综合练习 + 真题</span></div>
+            <div class="plan-item highlight"><span class="plan-day">7</span><span>查漏补缺 + 考前回顾</span></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div class="card" v-if="!outline">
+      <h2 class="section-title">功能说明</h2>
+      <div class="feature-grid">
+        <div class="feature"><strong>提纲生成</strong><p>输入课程名，整理章节知识点</p></div>
+        <div class="feature"><strong>重点标记</strong><p>标注各章节考试频率</p></div>
+        <div class="feature"><strong>复习计划</strong><p>生成7天复习计划模板</p></div>
+        <div class="feature"><strong>学习建议</strong><p>针对性复习策略</p></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.input-bar {
+  display: flex;
+  gap: 8px;
+}
+.input-bar .input { flex: 1; }
+
+.outline-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.chapter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chapter-item {
+  padding: 10px 12px;
+  background: #f7f7f7;
+  border-radius: 8px;
+}
+
+.chapter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.chapter-title { font-weight: 700; font-size: 14px; }
+
+.freq { display: flex; gap: 3px; }
+.freq-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e5e5e5;
+}
+.freq-dot.active { background: var(--xm-green); }
+
+.points { display: flex; flex-wrap: wrap; gap: 4px; }
+.point-tag {
+  padding: 2px 10px;
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.result-label {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 20px 0 10px;
+}
+
+.tips-list { display: flex; flex-direction: column; gap: 4px; }
+.tip-item {
+  padding: 8px 12px;
+  background: #dbeafe;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-list { display: flex; flex-direction: column; gap: 6px; }
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f7f7f7;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.plan-item.highlight {
+  background: #dcfce7;
+  border: 2px solid var(--xm-green);
+}
+.plan-day {
+  width: 32px;
+  height: 32px;
+  background: var(--xm-green);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.feature {
+  padding: 12px;
+  background: #f7f7f7;
+  border-radius: 8px;
+}
+.feature strong { font-size: 14px; display: block; margin-bottom: 2px; }
+.feature p { font-size: 13px; color: #777; }
+
+@media (max-width: 800px) {
+  .outline-layout { grid-template-columns: 1fr; }
+  .feature-grid { grid-template-columns: 1fr; }
+}
+
+.error-msg {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+</style>
