@@ -1,21 +1,13 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
-const scanPath = ref('~/Desktop')
+const scanPath = ref('')
+const sandboxDir = ref('')
 const files = ref([])
 const scanning = ref(false)
+const organizing = ref(false)
 const organized = ref(false)
-
-const sampleFiles = [
-  { name: '数据结构_实验3_报告.pdf', type: 'report', course: '数据结构', week: 3 },
-  { name: '第5章习题答案.docx', type: 'homework', course: '数据结构', week: 5 },
-  { name: '课件_排序算法.pptx', type: 'slides', course: '数据结构', week: 4 },
-  { name: '算法导论_参考.pdf', type: 'reference', course: '数据结构', week: 0 },
-  { name: '实验指导书_实验4.pdf', type: 'guide', course: '数据结构', week: 4 },
-  { name: '小组项目_分工表.xlsx', type: 'project', course: '软件工程', week: 0 },
-  { name: '未命名文档.docx', type: 'unknown', course: '未知', week: 0 },
-  { name: 'IMG_20240315.jpg', type: 'image', course: '未知', week: 0 }
-]
+const renaming = ref(false)
 
 const typeLabels = {
   report: { label: '报告', tag: 'tag-green' },
@@ -28,20 +20,99 @@ const typeLabels = {
   image: { label: '图片', tag: 'tag-red' }
 }
 
-const scanFiles = () => {
+onMounted(async () => {
+  // 扫描沙箱目录获取默认路径
+  const result = await window.file.scanDir()
+  if (result.success) {
+    sandboxDir.value = result.data?.[0]?.path?.split('/').slice(0, -1).join('/') || '~/XueMateSandbox'
+  }
+  scanPath.value = sandboxDir.value || '~/XueMateSandbox'
+})
+
+const scanFiles = async () => {
   scanning.value = true
-  setTimeout(() => {
-    files.value = sampleFiles
-    scanning.value = false
-  }, 1500)
+  files.value = []
+  organized.value = false
+
+  const result = await window.file.scanDir(scanPath.value)
+  if (result.success) {
+    files.value = (result.data || []).map(f => ({
+      name: f.name,
+      path: f.path,
+      size: f.size,
+      ext: f.ext,
+      type: 'unknown',
+      course: '未知',
+      week: 0,
+      newName: ''
+    }))
+  }
+  scanning.value = false
 }
 
-const organizeFiles = () => { organized.value = true }
+const doOrganize = async () => {
+  if (files.value.length === 0) return
+  organizing.value = true
 
-const getNewName = (file) => {
-  if (file.course === '未知') return file.name
-  const week = file.week > 0 ? `_W${file.week}` : ''
-  return `${file.course}${week}_${typeLabels[file.type].label}_${file.name}`
+  const fileNames = files.value.map(f => f.name)
+  const result = await window.file.organize(fileNames)
+
+  if (result.success) {
+    try {
+      const jsonMatch = result.data.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        // 合并 LLM 分类结果到文件列表
+        for (const item of parsed.files || []) {
+          const file = files.value.find(f => f.name === item.name)
+          if (file) {
+            file.type = typeLabels[item.type] ? item.type : 'unknown'
+            file.course = item.course || '未知'
+            file.week = item.week || 0
+            file.newName = item.newName || ''
+          }
+        }
+        organized.value = true
+      }
+    } catch (e) {
+      console.error('解析分类结果失败:', e)
+    }
+  }
+  organizing.value = false
+}
+
+const doRename = async () => {
+  const ops = files.value
+    .filter(f => f.newName && f.newName !== f.name)
+    .map(f => ({
+      from: f.path,
+      to: f.path.replace(f.name, f.newName)
+    }))
+
+  if (ops.length === 0) return
+  renaming.value = true
+
+  const result = await window.file.renameBatch(ops)
+  if (result.success) {
+    // 更新文件列表
+    for (const op of result.data || []) {
+      if (op.success) {
+        const file = files.value.find(f => f.path === op.from)
+        if (file) {
+          file.name = op.to.split('/').pop()
+          file.path = op.to
+          file.newName = ''
+        }
+      }
+    }
+  }
+  renaming.value = false
+}
+
+const formatSize = (bytes) => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 </script>
 
@@ -49,13 +120,13 @@ const getNewName = (file) => {
   <div class="fade-in">
     <div class="page-header">
       <h1 class="page-title">资料整理</h1>
-      <p class="page-desc">扫描课程文件夹，自动分类归档</p>
+      <p class="page-desc">扫描课程文件夹，AI 自动分类归档</p>
     </div>
 
     <div class="card">
       <h2 class="section-title">扫描目录</h2>
       <div class="scan-bar">
-        <input v-model="scanPath" class="input" placeholder="输入目录路径，如 ~/Desktop" />
+        <input v-model="scanPath" class="input" placeholder="输入目录路径" />
         <button class="btn btn-primary" @click="scanFiles" :disabled="scanning">
           {{ scanning ? '扫描中...' : '开始扫描' }}
         </button>
@@ -72,37 +143,48 @@ const getNewName = (file) => {
       </div>
 
       <div class="file-list">
-        <div v-for="file in files" :key="file.name" class="file-item">
+        <div v-for="file in files" :key="file.path" class="file-item">
           <div class="file-icon">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="#777" d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
           </div>
           <div class="file-info">
             <div class="file-name">{{ file.name }}</div>
             <div class="file-meta">
-              <span :class="['tag', typeLabels[file.type].tag]">{{ typeLabels[file.type].label }}</span>
+              <span :class="['tag', typeLabels[file.type]?.tag || 'tag-red']">{{ typeLabels[file.type]?.label || '未分类' }}</span>
               <span class="tag" v-if="file.course !== '未知'">{{ file.course }}</span>
               <span class="tag" v-if="file.week > 0">W{{ file.week }}</span>
+              <span class="tag tag-blue">{{ formatSize(file.size) }}</span>
             </div>
           </div>
-          <div class="file-new-name" v-if="organized && file.course !== '未知'">
-            <span class="arrow">→</span>
-            <span class="new-name">{{ getNewName(file) }}</span>
+          <div class="file-new-name" v-if="organized && file.newName && file.newName !== file.name">
+            <span class="arrow">&rarr;</span>
+            <span class="new-name">{{ file.newName }}</span>
           </div>
         </div>
       </div>
 
       <div class="action-bar">
-        <button class="btn btn-primary" @click="organizeFiles" v-if="!organized">一键整理</button>
-        <span class="tag tag-green" v-else>整理完成，文件将按课程/周次/类型归档</span>
+        <button class="btn btn-primary" @click="doOrganize" v-if="!organized" :disabled="organizing">
+          {{ organizing ? 'AI 分析中...' : 'AI 智能分类' }}
+        </button>
+        <template v-else>
+          <button class="btn btn-primary" @click="doRename" :disabled="renaming">
+            {{ renaming ? '重命名中...' : '执行重命名' }}
+          </button>
+          <button class="btn" @click="organized = false; files.forEach(f => { f.type = 'unknown'; f.course = '未知'; f.week = 0; f.newName = '' })">
+            重新分类
+          </button>
+        </template>
       </div>
     </div>
 
-    <div class="card" v-if="files.length === 0">
+    <div class="card" v-if="files.length === 0 && !scanning">
       <h2 class="section-title">使用说明</h2>
       <div class="steps">
-        <div class="step"><span class="step-num">1</span><div><strong>选择目录</strong><p>输入课程文件夹路径</p></div></div>
-        <div class="step"><span class="step-num">2</span><div><strong>扫描文件</strong><p>自动识别文件类型</p></div></div>
-        <div class="step"><span class="step-num">3</span><div><strong>一键整理</strong><p>按课程/周次/类型归档</p></div></div>
+        <div class="step"><span class="step-num">1</span><div><strong>选择目录</strong><p>默认扫描沙箱目录 {{ sandboxDir || '~/XueMateSandbox' }}</p></div></div>
+        <div class="step"><span class="step-num">2</span><div><strong>扫描文件</strong><p>读取目录中的所有文件</p></div></div>
+        <div class="step"><span class="step-num">3</span><div><strong>AI 分类</strong><p>DeepSeek 自动识别文件类型、课程、周次</p></div></div>
+        <div class="step"><span class="step-num">4</span><div><strong>一键重命名</strong><p>按课程/周次/类型规范命名</p></div></div>
       </div>
     </div>
   </div>
@@ -161,7 +243,9 @@ const getNewName = (file) => {
 
 .action-bar {
   margin-top: 16px;
-  text-align: center;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
 }
 
 .steps {

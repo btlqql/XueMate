@@ -12,7 +12,10 @@ const llmAPI = {
 
 const fileAPI = {
   selectPDF: () => ipcRenderer.invoke('file:selectPDF'),
-  checkPDF: (filePath: string) => ipcRenderer.invoke('file:checkPDF', filePath)
+  checkPDF: (filePath: string) => ipcRenderer.invoke('file:checkPDF', filePath),
+  scanDir: (dirPath?: string) => ipcRenderer.invoke('file:scanDir', dirPath),
+  organize: (fileNames: string[]) => ipcRenderer.invoke('file:organize', fileNames),
+  renameBatch: (operations: { from: string; to: string }[]) => ipcRenderer.invoke('file:renameBatch', operations)
 }
 
 const chatAPI = {

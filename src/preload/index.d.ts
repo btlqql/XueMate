@@ -16,6 +16,9 @@ interface LLMAPI {
 interface FileAPI {
   selectPDF: () => Promise<{ success: boolean; data?: string; error?: string }>
   checkPDF: (filePath: string) => Promise<LLMResult>
+  scanDir: (dirPath?: string) => Promise<{ success: boolean; data?: { name: string; path: string; size: number; ext: string }[]; error?: string }>
+  organize: (fileNames: string[]) => Promise<LLMResult>
+  renameBatch: (operations: { from: string; to: string }[]) => Promise<{ success: boolean; data?: { from: string; to: string; success: boolean; error?: string }[]; error?: string }>
 }
 
 interface AgentAPI {

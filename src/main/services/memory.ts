@@ -57,6 +57,11 @@ export function saveMemory(memory: UserMemory): void {
   writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2))
 }
 
+// 判断是否为新用户（没有基本资料）
+function isNewUser(memory: UserMemory): boolean {
+  return !memory.profile.name && !memory.profile.grade
+}
+
 // 构建注入记忆的系统提示词
 export function buildSystemPrompt(memory: UserMemory): string {
   const parts = [
@@ -64,6 +69,15 @@ export function buildSystemPrompt(memory: UserMemory): string {
     '请用 Markdown 格式回答，适当使用标题、列表、代码块等。',
     '禁止推荐任何不适合学生的内容。'
   ]
+
+  // 新用户：提醒 AI 在回复末尾自然地询问基本信息
+  if (isNewUser(memory)) {
+    parts.push(
+      '【重要】这是新用户，你还不了解 TA。请在每次回复的末尾，用一句话自然地询问学生的基本信息（姓名、年级、正在学的科目）。',
+      '例如："对了，方便告诉我你叫什么、上几年级吗？这样我可以更好地帮到你~"',
+      '不要一上来就问，先回答用户的问题，再自然地补一句。'
+    )
+  }
 
   if (memory.profile.name) parts.push(`学生姓名：${memory.profile.name}`)
   if (memory.profile.grade) parts.push(`年级：${memory.profile.grade}`)

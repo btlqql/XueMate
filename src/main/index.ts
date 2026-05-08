@@ -1,10 +1,11 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync, statSync, renameSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { parseTask, tutorCode, organizeFiles, generateReview, judgeCode, generateProblems, checkFormat, chat } from './services/llm'
 import { runAgent } from './services/agent'
+import { SANDBOX_DIR } from './services/sandbox'
 import { destroyWebView, setHostWindow, showBrowserAtHeight, hideBrowser } from './services/web'
 import { PDFParse } from 'pdf-parse'
 import * as chatStore from './services/chatStore'
@@ -144,6 +145,63 @@ function registerLLMHandlers(): void {
       }
     } catch (error: any) {
       console.error('[Main] checkPDF error:', error.message)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // 扫描目录文件
+  ipcMain.handle('file:scanDir', async (_event, dirPath?: string) => {
+    console.log('[Main] file:scanDir called:', dirPath)
+    try {
+      const dir = dirPath || SANDBOX_DIR
+      const entries = readdirSync(dir)
+      const files = entries
+        .filter(name => !name.startsWith('.'))
+        .map(name => {
+          const fullPath = join(dir, name)
+          const stat = statSync(fullPath)
+          return {
+            name,
+            path: fullPath,
+            isDir: stat.isDirectory(),
+            size: stat.size,
+            ext: name.includes('.') ? name.split('.').pop()?.toLowerCase() || '' : ''
+          }
+        })
+        .filter(f => !f.isDir) // 只返回文件，不包括目录
+      return { success: true, data: files }
+    } catch (error: any) {
+      console.error('[Main] scanDir error:', error.message)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // LLM 分类文件
+  ipcMain.handle('file:organize', async (_event, fileNames: string[]) => {
+    console.log('[Main] file:organize called, files:', fileNames.length)
+    try {
+      const result = await organizeFiles(fileNames)
+      return { success: true, data: result }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // 批量重命名文件
+  ipcMain.handle('file:renameBatch', async (_event, operations: { from: string; to: string }[]) => {
+    console.log('[Main] file:renameBatch called, ops:', operations.length)
+    try {
+      const results: { from: string; to: string; success: boolean; error?: string }[] = []
+      for (const op of operations) {
+        try {
+          renameSync(op.from, op.to)
+          results.push({ from: op.from, to: op.to, success: true })
+        } catch (e: any) {
+          results.push({ from: op.from, to: op.to, success: false, error: e.message })
+        }
+      }
+      return { success: true, data: results }
+    } catch (error: any) {
       return { success: false, error: error.message }
     }
   })
