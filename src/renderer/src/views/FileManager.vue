@@ -20,6 +20,13 @@ const typeLabels = {
   image: { label: '图片', tag: 'tag-red' }
 }
 
+// LLM 返回中文类型 → 映射到英文 key
+const typeMap = {
+  '报告': 'report', '作业': 'homework', '课件': 'slides',
+  '参考': 'reference', '指导': 'guide', '项目': 'project',
+  '未分类': 'unknown', '图片': 'image'
+}
+
 onMounted(async () => {
   // 扫描沙箱目录获取默认路径
   const result = await window.file.scanDir()
@@ -66,7 +73,7 @@ const doOrganize = async () => {
         for (const item of parsed.files || []) {
           const file = files.value.find(f => f.name === item.name)
           if (file) {
-            file.type = typeLabels[item.type] ? item.type : 'unknown'
+            file.type = typeMap[item.type] || 'unknown'
             file.course = item.course || '未知'
             file.week = item.week || 0
             file.newName = item.newName || ''
