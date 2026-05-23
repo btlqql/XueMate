@@ -1,9 +1,7 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { join } from 'path'
 import { randomUUID } from 'crypto'
+import db from './db'
 
-const DATA_DIR = join(process.env.HOME || '/tmp', '.xuemate')
-const STORE_FILE = join(DATA_DIR, 'conversations.json')
+const MAX_MESSAGES = 500
 
 export interface ChatMessage {
   id: string
@@ -20,97 +18,104 @@ export interface Conversation {
   updatedAt: number
 }
 
-interface Store {
-  conversations: Conversation[]
+// ── 预编译 SQL ──
+
+const stmts = {
+  listConversations: db.prepare(
+    'SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC'
+  ),
+  getConversation: db.prepare('SELECT * FROM conversations WHERE id = ?'),
+  getMessages: db.prepare(
+    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC'
+  ),
+  insertConversation: db.prepare(
+    'INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)'
+  ),
+  deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
+  insertMessage: db.prepare(
+    'INSERT INTO messages (id, conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)'
+  ),
+  updateConvTime: db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?'),
+  updateTitle: db.prepare('UPDATE conversations SET title = ? WHERE id = ?'),
+  countMessages: db.prepare(
+    'SELECT COUNT(*) as cnt FROM messages WHERE conversation_id = ?'
+  ),
+  trimMessages: db.prepare(`
+    DELETE FROM messages WHERE conversation_id = ? AND id NOT IN (
+      SELECT id FROM messages WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?
+    )
+  `)
 }
 
-function ensureDir(): void {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true })
-  }
-}
-
-function loadStore(): Store {
-  ensureDir()
-  if (!existsSync(STORE_FILE)) {
-    return { conversations: [] }
-  }
-  try {
-    return JSON.parse(readFileSync(STORE_FILE, 'utf-8'))
-  } catch {
-    return { conversations: [] }
-  }
-}
-
-function saveStore(store: Store): void {
-  ensureDir()
-  writeFileSync(STORE_FILE, JSON.stringify(store, null, 2))
-}
-
-// 获取所有会话（不含完整消息，只返回摘要）
+// 获取所有会话（不含消息）
 export function getConversations(): Omit<Conversation, 'messages'>[] {
-  const store = loadStore()
-  return store.conversations.map(c => ({
-    id: c.id,
-    title: c.title,
+  const rows = stmts.listConversations.all() as any[]
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
     messages: [],
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
   }))
 }
 
 // 获取单个会话（含完整消息）
 export function getConversation(id: string): Conversation | null {
-  const store = loadStore()
-  return store.conversations.find(c => c.id === id) || null
+  const row = stmts.getConversation.get(id) as any
+  if (!row) return null
+  const msgs = stmts.getMessages.all(id) as any[]
+  return {
+    id: row.id,
+    title: row.title,
+    messages: msgs.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp
+    })),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }
 }
 
 // 新建会话
 export function createConversation(): string {
-  const store = loadStore()
-  const conv: Conversation = {
-    id: randomUUID(),
-    title: '新对话',
-    messages: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now()
-  }
-  store.conversations.unshift(conv)
-  saveStore(store)
-  return conv.id
+  const id = randomUUID()
+  const now = Date.now()
+  stmts.insertConversation.run(id, '新对话', now, now)
+  return id
 }
 
-// 删除会话
+// 删除会话（CASCADE 自动删消息）
 export function deleteConversation(id: string): boolean {
-  const store = loadStore()
-  const idx = store.conversations.findIndex(c => c.id === id)
-  if (idx === -1) return false
-  store.conversations.splice(idx, 1)
-  saveStore(store)
-  return true
+  const result = stmts.deleteConversation.run(id)
+  return result.changes > 0
 }
 
 // 添加消息
 export function addMessage(convId: string, msg: ChatMessage): boolean {
-  const store = loadStore()
-  const conv = store.conversations.find(c => c.id === convId)
-  if (!conv) return false
-  conv.messages.push(msg)
-  // 第一条用户消息自动设为标题
-  if (conv.title === '新对话' && msg.role === 'user') {
-    conv.title = msg.content.slice(0, 20)
+  stmts.insertMessage.run(msg.id, convId, msg.role, msg.content, msg.timestamp)
+
+  // 消息上限
+  const { cnt } = stmts.countMessages.get(convId) as any
+  if (cnt > MAX_MESSAGES) {
+    stmts.trimMessages.run(convId, convId, MAX_MESSAGES)
   }
-  conv.updatedAt = Date.now()
-  saveStore(store)
+
+  // 第一条用户消息自动设为标题
+  if (msg.role === 'user') {
+    const conv = stmts.getConversation.get(convId) as any
+    if (conv && conv.title === '新对话') {
+      stmts.updateTitle.run(msg.content.slice(0, 20), convId)
+    }
+  }
+
+  stmts.updateConvTime.run(Date.now(), convId)
   return true
 }
 
 // 更新会话标题
 export function updateTitle(convId: string, title: string): boolean {
-  const store = loadStore()
-  const conv = store.conversations.find(c => c.id === convId)
-  if (!conv) return false
-  conv.title = title
-  saveStore(store)
-  return true
+  const result = stmts.updateTitle.run(title, convId)
+  return result.changes > 0
 }

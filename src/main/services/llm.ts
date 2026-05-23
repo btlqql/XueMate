@@ -7,36 +7,169 @@ interface ChatOptions {
   messages: Message[]
   temperature?: number
   maxTokens?: number
+  model?: string
 }
 
 const API_KEY = process.env.DEEPSEEK_API_KEY || ''
 const BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1/chat/completions'
-const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
+const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
 
-export async function chat(options: ChatOptions): Promise<string> {
-  const { messages, temperature = 0.7, maxTokens = 2048 } = options
+export { MODEL, PRO_MODEL }
 
-  const response = await fetch(BASE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`
-    },
-    body: JSON.stringify({
-      model: MODEL,
+const MAX_RETRIES = 2
+const RETRY_DELAY_MS = 3000
+
+const friendlyErrors: Record<number, string> = {
+  429: '请求太频繁，请稍后再试',
+  503: 'AI 服务暂时繁忙，请稍后重试',
+  500: 'AI 服务内部错误，请稍后重试'
+}
+
+export async function chat(options: ChatOptions & { timeoutMs?: number }): Promise<string> {
+  const { messages, temperature = 0.7, maxTokens = 2048, timeoutMs = 30000, model } = options
+  const useModel = model || MODEL
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+    const body: Record<string, any> = {
+      model: useModel,
       messages,
+      max_tokens: maxTokens,
       temperature,
-      max_tokens: maxTokens
-    })
-  })
+      thinking: { type: 'disabled' }
+    }
 
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`DeepSeek API error: ${response.status} - ${error}`)
+    try {
+      const response = await fetch(BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      })
+
+      if (!response.ok) {
+        const status = response.status
+        // 可重试的状态码
+        if ((status === 429 || status === 503) && attempt < MAX_RETRIES) {
+          console.warn(`[LLM] ${status} 错误，${RETRY_DELAY_MS / 1000}秒后重试 (${attempt + 1}/${MAX_RETRIES})`)
+          await sleep(RETRY_DELAY_MS)
+          continue
+        }
+        throw new Error(friendlyErrors[status] || `请求失败 (${status})`)
+      }
+
+      const data = await response.json()
+      return data.choices[0].message.content
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        if (attempt < MAX_RETRIES) {
+          console.warn(`[LLM] 超时，重试 (${attempt + 1}/${MAX_RETRIES})`)
+          continue
+        }
+        throw new Error('请求超时，请检查网络或稍后重试')
+      }
+      throw err
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
-  const data = await response.json()
-  return data.choices[0].message.content
+  throw new Error('多次重试失败，请稍后再试')
+}
+
+// 流式输出：逐 token 回调
+export async function chatStream(
+  options: ChatOptions & {
+    onToken: (token: string) => void
+    onDone: (fullContent: string) => void
+    onError: (error: string) => void
+    timeoutMs?: number
+  }
+): Promise<void> {
+  const { messages, temperature = 0.7, maxTokens = 2048, onToken, onDone, onError, timeoutMs = 60000, model } = options
+  const useModel = model || MODEL
+  console.log('[LLM] chatStream model:', useModel)
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  const body: Record<string, any> = {
+    model: useModel,
+    messages,
+    max_tokens: maxTokens,
+    stream: true,
+    temperature,
+    thinking: { type: 'disabled' }
+  }
+
+  try {
+    const response = await fetch(BASE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+
+    if (!response.ok) {
+      const status = response.status
+      throw new Error(friendlyErrors[status] || `请求失败 (${status})`)
+    }
+
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let fullContent = ''
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // 最后一个不完整的行留到下次
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data:')) continue
+        const data = trimmed.slice(5).trim()
+        if (data === '[DONE]') continue
+
+        try {
+          const parsed = JSON.parse(data)
+          const token = parsed.choices?.[0]?.delta?.content
+          if (token) {
+            fullContent += token
+            onToken(token)
+          }
+        } catch {
+          // 跳过无法解析的行
+        }
+      }
+    }
+
+    onDone(fullContent)
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      onError('请求超时，请检查网络或稍后重试')
+    } else {
+      onError(err.message || '请求失败')
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 // 任务解析
@@ -50,7 +183,8 @@ export async function parseTask(text: string): Promise<string> {
   "tasks": [
     {
       "title": "任务标题",
-      "deadline": "截止时间",
+      "deadline": "截止时间（自然语言描述）",
+      "deadlineDate": "截止日期（ISO 8601格式，如 2026-05-15T23:59:00+08:00，无法解析则为空字符串）",
       "format": "提交格式",
       "naming": "命名要求",
       "note": "其他说明"
@@ -90,26 +224,6 @@ export async function tutorCode(code: string, type: 'code' | 'report'): Promise<
       { role: 'user', content: code }
     ],
     temperature: 0.4
-  })
-}
-
-// 资料整理
-export async function organizeFiles(fileNames: string[]): Promise<string> {
-  return chat({
-    messages: [
-      {
-        role: 'system',
-        content: `你是课程资料整理助手。根据文件名列表，判断每个文件的类型（报告/作业/课件/参考/指导/项目/未分类）和所属课程。按以下JSON格式返回：
-{
-  "files": [
-    {"name": "原文件名", "type": "类型", "course": "课程名", "week": 周次数字, "newName": "建议新文件名"}
-  ]
-}
-只返回JSON。`
-      },
-      { role: 'user', content: fileNames.join('\n') }
-    ],
-    temperature: 0.3
   })
 }
 

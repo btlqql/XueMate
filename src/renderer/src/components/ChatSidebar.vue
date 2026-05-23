@@ -1,5 +1,5 @@
 <script setup>
-const props = defineProps({
+defineProps({
   conversations: { type: Array, default: () => [] },
   activeId: String,
   collapsed: Boolean
@@ -28,12 +28,28 @@ const lastMsg = (conv) => {
     <!-- 收起状态 -->
     <div class="collapsed-bar" v-if="collapsed">
       <button class="icon-btn" @click="emit('toggle')" title="展开">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
           <polyline points="9 18 15 12 9 6"></polyline>
         </svg>
       </button>
       <button class="icon-btn" @click="emit('new')" title="新建对话">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        >
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
@@ -56,12 +72,28 @@ const lastMsg = (conv) => {
     <template v-if="!collapsed">
       <div class="sidebar-header">
         <button class="toggle-btn" @click="emit('toggle')" title="收起">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
         <button class="new-chat-btn" @click="emit('new')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          >
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
@@ -82,9 +114,19 @@ const lastMsg = (conv) => {
           <div class="conv-footer">
             <span class="conv-time">{{ relativeTime(conv.updatedAt) }}</span>
             <button class="conv-delete" @click.stop="emit('delete', conv.id)" title="删除">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
                 <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <path
+                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                ></path>
               </svg>
             </button>
           </div>
@@ -315,6 +357,11 @@ const lastMsg = (conv) => {
   color: #ccc;
 }
 
-.conv-empty p { margin: 0; }
-.conv-empty-hint { font-size: 12px; margin-top: 4px !important; }
+.conv-empty p {
+  margin: 0;
+}
+.conv-empty-hint {
+  font-size: 12px;
+  margin-top: 4px !important;
+}
 </style>

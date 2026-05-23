@@ -1,5 +1,5 @@
 import { exec } from 'child_process'
-import { join } from 'path'
+import { join, basename } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 
 // 沙箱目录
@@ -26,61 +26,125 @@ function extractCommand(cmd: string): string {
   // 处理 /usr/bin/xxx 路径
   const parts = trimmed.split(/\s+/)
   const bin = parts[0] || ''
-  return bin.split('/').pop() || bin
+  return basename(bin) || bin
 }
 
 // 完全禁止的命令（黑名单优先）
 const BLOCKED_PATTERNS = [
-  /^rm\s+-rf\s+\/(\s|$)/,           // rm -rf /
-  /^rm\s+-rf\s+~\/(\s|$)/,          // rm -rf ~/
-  /\bsudo\b/,                         // sudo
-  /\bchmod\s+777\b/,                 // chmod 777
-  /\bshutdown\b/,                     // shutdown
-  /\breboot\b/,                       // reboot
-  /\bmkfs\b/,                         // mkfs
-  /\bdd\s+.*of=\/dev\//,             // dd to device
-  /\b:(){ :\|:& };:/,                // fork bomb
-  /\bcurl\b.*\|\s*(ba)?sh/,          // curl | sh
-  /\bwget\b.*\|\s*(ba)?sh/,          // wget | sh
-  /\bkill\s+-9\s+-1\b/,             // kill all processes
+  /^rm\s+-rf\s+\/(\s|$)/, // rm -rf /
+  /^rm\s+-rf\s+~\/(\s|$)/, // rm -rf ~/
+  /\bsudo\b/, // sudo
+  /\bchmod\s+777\b/, // chmod 777
+  /\bshutdown\b/, // shutdown
+  /\breboot\b/, // reboot
+  /\bmkfs\b/, // mkfs
+  /\bdd\s+.*of=\/dev\//, // dd to device
+  /\b:(){ :\|:& };:/, // fork bomb
+  /\bcurl\b.*\|\s*(ba)?sh/, // curl | sh
+  /\bwget\b.*\|\s*(ba)?sh/, // wget | sh
+  /\bkill\s+-9\s+-1\b/ // kill all processes
 ]
 
 // 只读命令（自动执行，不需要确认）
 const SAFE_COMMANDS = new Set([
-  'ls', 'll', 'la', 'dir',
-  'cat', 'head', 'tail', 'less', 'more',
-  'grep', 'rg', 'ag', 'ack',
-  'find', 'fd',
-  'wc', 'sort', 'uniq', 'cut', 'awk', 'sed',   // 只读 sed 用法会单独检查
-  'pwd', 'echo', 'printf',
-  'whoami', 'id', 'date', 'cal',
-  'which', 'whereis', 'type',
-  'file', 'stat', 'du', 'df',
+  'ls',
+  'll',
+  'la',
+  'dir',
+  'cat',
+  'head',
+  'tail',
+  'less',
+  'more',
+  'grep',
+  'rg',
+  'ag',
+  'ack',
+  'find',
+  'fd',
+  'wc',
+  'sort',
+  'uniq',
+  'cut',
+  'awk',
+  'sed', // 只读 sed 用法会单独检查
+  'pwd',
+  'echo',
+  'printf',
+  'whoami',
+  'id',
+  'date',
+  'cal',
+  'which',
+  'whereis',
+  'type',
+  'file',
+  'stat',
+  'du',
+  'df',
   'tree',
-  'env', 'printenv',
-  'uname', 'sw_vers', 'hostname',
-  'ps', 'top', 'uptime', 'free',
-  'ifconfig', 'ipconfig', 'ping', 'traceroute', 'nslookup', 'dig',
-  'python3', 'python', 'node', 'ruby',          // 执行脚本属于 confirm
+  'env',
+  'printenv',
+  'uname',
+  'sw_vers',
+  'hostname',
+  'ps',
+  'top',
+  'uptime',
+  'free',
+  'ifconfig',
+  'ipconfig',
+  'ping',
+  'traceroute',
+  'nslookup',
+  'dig',
+  'python3',
+  'python',
+  'node',
+  'ruby' // 执行脚本属于 confirm
 ])
 
 // 需要确认的写操作命令
 const CONFIRM_COMMANDS = new Set([
-  'rm', 'rmdir', 'unlink',
-  'mv', 'cp',
-  'mkdir', 'touch',
-  'chmod', 'chown', 'chgrp',
+  'rm',
+  'rmdir',
+  'unlink',
+  'mv',
+  'cp',
+  'mkdir',
+  'touch',
+  'chmod',
+  'chown',
+  'chgrp',
   'tee',
-  'tar', 'zip', 'unzip', 'gzip', 'gunzip',
-  'npm', 'yarn', 'pnpm', 'pip', 'pip3', 'brew',
+  'tar',
+  'zip',
+  'unzip',
+  'gzip',
+  'gunzip',
+  'npm',
+  'yarn',
+  'pnpm',
+  'pip',
+  'pip3',
+  'brew',
   'git',
-  'curl', 'wget',
-  'python', 'python3', 'node', 'ruby', 'go', 'cargo',
-  'make', 'cmake',
+  'curl',
+  'wget',
+  'python',
+  'python3',
+  'node',
+  'ruby',
+  'go',
+  'cargo',
+  'make',
+  'cmake',
   'docker',
-  'vim', 'nano', 'vi',
+  'vim',
+  'nano',
+  'vi',
   'open',
-  'xcode-select',
+  'xcode-select'
 ])
 
 // 检查命令是否包含重定向写操作
@@ -92,7 +156,7 @@ function hasRedirect(cmd: string): boolean {
 
 // 检查命令是否包含管道（管道中的命令也需要检查）
 function hasPipe(cmd: string): boolean {
-  return /\|/.test(cmd.replace(/\|{2}/, ''))  // || 不算管道
+  return /\|/.test(cmd.replace(/\|{2}/, '')) // || 不算管道
 }
 
 // 命令分类
@@ -158,19 +222,23 @@ export function execInSandbox(
   const timeout = options?.timeout || 30000
 
   return new Promise((resolve) => {
-    exec(command, {
-      cwd,
-      timeout,
-      maxBuffer: 1024 * 1024,
-      shell: '/bin/zsh',
-      env: { ...process.env, XM_SANDBOX: '1' }
-    }, (error, stdout, stderr) => {
-      resolve({
-        stdout: stdout || '',
-        stderr: stderr || '',
-        code: error ? (error.code || 1) : 0
-      })
-    })
+    exec(
+      command,
+      {
+        cwd,
+        timeout,
+        maxBuffer: 1024 * 1024,
+        shell: '/bin/zsh',
+        env: { ...process.env, XM_SANDBOX: '1' }
+      },
+      (error, stdout, stderr) => {
+        resolve({
+          stdout: stdout || '',
+          stderr: stderr || '',
+          code: error ? error.code || 1 : 0
+        })
+      }
+    )
   })
 }
 
