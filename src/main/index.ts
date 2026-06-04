@@ -34,6 +34,7 @@ import {
   compressMemoryIfNeeded
 } from './services/memory'
 import * as rag from './services/rag'
+import { buildLearningGraph } from './services/learningGraph'
 import * as taskStore from './services/taskStore'
 import { migrateFromJson } from './services/migrate'
 import { ensureEnoughText, extractTextFromFile } from './services/document'
@@ -367,17 +368,16 @@ function registerLLMHandlers(): void {
             : rag.getStats(ragCollectionId)
         if (stats.chunkCount > 0) {
           try {
-            const results = await rag.retrieve(content, { topK: 3, collectionId: ragCollectionId })
-            if (results.length > 0 && results[0].score > 0.3) {
-              ragContext =
-                '\n\n以下是用户课程资料中的相关内容：\n' +
-                results
-                  .map(
-                    (r, i) =>
-                      `[${i + 1}] (来源: ${r.chunk.fileName}, 相关度: ${(r.score * 100).toFixed(0)}%)\n${r.chunk.content}`
-                  )
-                  .join('\n\n') +
-                '\n\n请优先基于以上资料回答。如果资料中没有相关内容，再用自己的知识回答。'
+            const results = await rag.retrieve(content, {
+              topK: 4,
+              candidateK: 48,
+              minScore: 0.16,
+              collectionId: ragCollectionId
+            })
+            if (results.length > 0 && results[0].score > 0.24) {
+              ragContext = rag.buildRagContext(results, {
+                title: '以下是用户课程资料中的相关内容'
+              })
             }
           } catch (e) {
             console.error('[RAG] 检索失败:', e)
@@ -538,6 +538,14 @@ function registerLLMHandlers(): void {
   ipcMain.handle('rag:stats', async (_event, collectionId?: string) => {
     try {
       return { success: true, data: rag.getStats(collectionId) }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('rag:learningGraph', async (_event, collectionId?: string) => {
+    try {
+      return { success: true, data: buildLearningGraph(collectionId) }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

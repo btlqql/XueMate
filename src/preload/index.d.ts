@@ -55,6 +55,46 @@ interface RagCollection {
   updatedAt: number
 }
 
+type LearningGraphNodeType = 'collection' | 'document' | 'chunk' | 'concept' | 'memory' | 'review'
+
+interface LearningGraphNode {
+  id: string
+  label: string
+  type: LearningGraphNodeType
+  size: number
+  score: number
+  meta?: Record<string, any>
+}
+
+interface LearningGraphEdge {
+  id: string
+  source: string
+  target: string
+  type: string
+  label: string
+  weight: number
+}
+
+interface LearningGraphData {
+  collectionId: string
+  collectionName: string
+  generatedAt: number
+  nodes: LearningGraphNode[]
+  edges: LearningGraphEdge[]
+  stats: {
+    nodeCount: number
+    edgeCount: number
+    collectionCount: number
+    documentCount: number
+    chunkCount: number
+    conceptCount: number
+    memoryAtomCount: number
+    reviewTaskCount: number
+    weakPointCount: number
+    density: number
+  }
+}
+
 interface RagAPI {
   collections: () => Promise<{ success: boolean; data?: RagCollection[]; error?: string }>
   createCollection: (
@@ -75,6 +115,9 @@ interface RagAPI {
     data?: { docCount: number; chunkCount: number }
     error?: string
   }>
+  learningGraph: (
+    collectionId?: string
+  ) => Promise<{ success: boolean; data?: LearningGraphData; error?: string }>
 }
 
 interface QuickSearchAPI {

@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, watch, nextTick, shallowRef } from 'vue'
-import { marked } from 'marked'
+import { ref } from 'vue'
 import AnimationRenderer from './animation/AnimationRenderer.vue'
+import { quickEntries, suggestions, useChatMessages } from '../composables/useChatMessages'
 
 const props = defineProps({
   messages: { type: Array, default: () => [] },
@@ -12,170 +12,14 @@ defineEmits(['send', 'open-entry'])
 
 const listRef = ref(null)
 
-// 是否有 AI 占位消息（流式输出时最后一条是 assistant）
-const hasAssistantPlaceholder = computed(() => {
-  const msgs = props.messages
-  return msgs.length > 0 && msgs[msgs.length - 1].role === 'assistant'
-})
-
-// 渲染缓存：避免对同一条消息重复解析 markdown
-const renderCache = new Map()
-// 流式渲染定时器
-let renderTimer = null
-const renderMd = (text, msgId) => {
-  // 非流式消息直接解析（有缓存）
-  if (msgId && renderCache.has(msgId)) {
-    return renderCache.get(msgId)
-  }
-  const html = marked.parse(text || '', { breaks: true })
-  if (msgId) renderCache.set(msgId, html)
-  return html
-}
-
-// 流式内容更新时，节流渲染（每 80ms 最多渲染一次）
-const debouncedRender = shallowRef('')
-let pendingContent = ''
-let pendingMsgId = null
-
-// 去掉未闭合的 SVG/animation 代码块（流式过程中避免显示未完成的源码）
-function stripIncompleteSvg(text) {
-  return text.replace(/```(?:svg|xml|animation)?\s*\n?[\s\S]*$/, '')
-}
-
-function scheduleRender(msgId, content) {
-  pendingContent = content
-  pendingMsgId = msgId
-  if (renderTimer) return
-  renderTimer = setTimeout(() => {
-    renderTimer = null
-    const cleanContent = stripIncompleteSvg(pendingContent || '')
-    const html = marked.parse(cleanContent, { breaks: true })
-    renderCache.set(pendingMsgId, html)
-    debouncedRender.value = html
-  }, 80)
-}
-
-// 当 loading 变为 false（流式结束），清除缓存中的流式条目
-watch(
-  () => props.loading,
-  (val) => {
-    if (!val && pendingMsgId) {
-      // 最终渲染一次（不需要 strip，因为完整内容会走 SVG 路径）
-      const cleanContent = stripIncompleteSvg(pendingContent || '')
-      const html = marked.parse(cleanContent, { breaks: true })
-      renderCache.set(pendingMsgId, html)
-      debouncedRender.value = html
-      pendingMsgId = null
-      pendingContent = ''
-    }
-  }
-)
-
-// 获取流式消息的 HTML（节流渲染）
-function getStreamingHtml(msg) {
-  scheduleRender(msg.id, msg.content)
-  return debouncedRender.value || marked.parse(msg.content || '', { breaks: true })
-}
-
-// 流式内容变化时自动滚动到底部
-watch(
-  () => {
-    const msgs = props.messages
-    if (msgs.length === 0) return ''
-    const last = msgs[msgs.length - 1]
-    return last.role === 'assistant' ? last.content : ''
-  },
-  () => {
-    if (props.loading) scrollToBottom()
-  }
-)
-
-// 检测消息中是否包含动画 JSON 块
-const ANIM_RE = /```animation\s*\n?([\s\S]*?)```/
-const OPEN_ANIM_BLOCK_RE = /```animation\s*\n?[\s\S]*$/
-
-function hasAnimBlock(text) {
-  const content = text || ''
-  return ANIM_RE.test(content) || OPEN_ANIM_BLOCK_RE.test(content)
-}
-
-// 将消息拆分为文本段和组件动画段
-function splitMessage(text) {
-  if (!text) return [{ type: 'text', content: '' }]
-  const parts = []
-  let lastIndex = 0
-  const re = /```animation\s*\n?([\s\S]*?)```/g
-  let match
-
-  while ((match = re.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: text.slice(lastIndex, match.index) })
-    }
-    try {
-      parts.push({ type: 'anim', data: JSON.parse(match[1].trim()) })
-    } catch {
-      parts.push({ type: 'text', content: '动画数据格式异常，无法预览。' })
-    }
-    lastIndex = match.index + match[0].length
-  }
-
-  if (lastIndex < text.length) {
-    const remaining = text.slice(lastIndex)
-    const openBlock = remaining.match(/```animation\s*\n?([\s\S]*)$/)
-    if (openBlock && openBlock.index !== undefined) {
-      if (openBlock.index > 0) {
-        parts.push({ type: 'text', content: remaining.slice(0, openBlock.index) })
-      }
-      try {
-        parts.push({ type: 'anim', data: JSON.parse(openBlock[1].trim()) })
-      } catch {
-        parts.push({ type: 'text', content: '动画数据还没生成完整，无法预览。' })
-      }
-    } else {
-      parts.push({ type: 'text', content: remaining })
-    }
-  }
-
-  return parts.length > 0 ? parts : [{ type: 'text', content: text }]
-}
-
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (listRef.value) {
-      listRef.value.scrollTop = listRef.value.scrollHeight
-    }
-  })
-}
-
-// 消息列表长度变化时清空缓存（切换会话）并滚动
-watch(
-  () => props.messages.length,
-  () => {
-    renderCache.clear()
-    scrollToBottom()
-  }
-)
-watch(() => props.loading, scrollToBottom)
-
-const relativeTime = (ts) => {
-  const diff = Date.now() - ts
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前'
-  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前'
-  return new Date(ts).toLocaleDateString('zh-CN')
-}
-
-const suggestions = [
-  '帮我复习数据结构',
-  '解释 Python 列表推导式',
-  '检查我的作业格式',
-  '制定今天的学习计划'
-]
-
-const quickEntries = [
-  { view: 'knowledge', title: '放入课本资料', desc: '让学伴看你的课件和笔记', icon: '📚' },
-  { view: 'tools', title: '学习小工具', desc: '作业、刷题、复习都在这里', icon: '✏️' }
-]
+const {
+  hasAssistantPlaceholder,
+  renderMd,
+  getStreamingHtml,
+  hasAnimBlock,
+  splitMessage,
+  relativeTime
+} = useChatMessages(props, listRef)
 </script>
 
 <template>

@@ -1,134 +1,26 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import KnowledgeGraph from '../components/KnowledgeGraph.vue'
+import { formatKnowledgeDate as formatDate, useKnowledgeBase } from '../composables/useKnowledgeBase'
 
-const collections = ref([])
-const activeCollectionId = ref('default')
-const documents = ref([])
-const stats = ref({ docCount: 0, chunkCount: 0 })
-const importing = ref(false)
-const creating = ref(false)
-const error = ref('')
-const newCollectionName = ref('')
-
-const activeCollection = computed(() =>
-  collections.value.find((collection) => collection.id === activeCollectionId.value)
-)
-
-onMounted(async () => {
-  await loadCollections()
-  await loadData()
-})
-
-async function loadCollections() {
-  try {
-    const result = await window.rag.collections()
-    if (result.success) {
-      collections.value = result.data || []
-      if (!collections.value.some((collection) => collection.id === activeCollectionId.value)) {
-        activeCollectionId.value = collections.value[0]?.id || 'default'
-      }
-    } else {
-      error.value = result.error || '加载资料夹失败'
-    }
-  } catch (e) {
-    console.error('[Knowledge] loadCollections 失败:', e)
-    error.value = '加载资料夹失败: ' + (e.message || '未知错误')
-  }
-}
-
-async function loadData() {
-  try {
-    const collectionId = activeCollectionId.value || 'default'
-    const [docRes, statsRes] = await Promise.all([
-      window.rag.documents(collectionId),
-      window.rag.stats(collectionId)
-    ])
-    if (docRes.success) documents.value = docRes.data || []
-    else error.value = docRes.error || '加载文档失败'
-
-    if (statsRes.success) stats.value = statsRes.data || { docCount: 0, chunkCount: 0 }
-    else error.value = statsRes.error || '加载统计失败'
-  } catch (e) {
-    console.error('[Knowledge] loadData 失败:', e)
-    error.value = '加载资料失败: ' + (e.message || '未知错误')
-  }
-}
-
-async function setActiveCollection(id) {
-  if (activeCollectionId.value === id) return
-  activeCollectionId.value = id
-  error.value = ''
-  await loadData()
-}
-
-async function createCollection() {
-  const name = newCollectionName.value.trim()
-  if (!name || creating.value) return
-
-  creating.value = true
-  error.value = ''
-  try {
-    const result = await window.rag.createCollection(name)
-    if (result.success && result.data) {
-      activeCollectionId.value = result.data.id
-      newCollectionName.value = ''
-      await loadCollections()
-      await loadData()
-    } else {
-      error.value = result.error || '创建资料夹失败'
-    }
-  } catch (e) {
-    error.value = '创建资料夹失败: ' + (e.message || '未知错误')
-  } finally {
-    creating.value = false
-  }
-}
-
-async function selectAndImport() {
-  if (importing.value) return
-  importing.value = true
-  error.value = ''
-
-  try {
-    const result = await window.rag.selectAndImport(activeCollectionId.value || 'default')
-    if (result.success) {
-      const { imported = [], errors = [] } = result.data || {}
-      if (errors.length > 0) {
-        error.value = errors.join('\n')
-      }
-      if (imported.length > 0) {
-        await loadCollections()
-      }
-      await loadData()
-    } else if (result.error !== '已取消') {
-      error.value = result.error
-    }
-  } catch (e) {
-    error.value = '导入失败: ' + (e.message || '未知错误')
-  } finally {
-    importing.value = false
-  }
-}
-
-async function deleteDoc(doc) {
-  if (!confirm(`确定删除 "${doc.fileName}"？`)) return
-  try {
-    await window.rag.delete(doc.id)
-    await loadCollections()
-    await loadData()
-  } catch (e) {
-    error.value = '删除失败: ' + (e.message || '未知错误')
-  }
-}
-
-function formatDate(ts) {
-  return new Date(ts).toLocaleDateString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const {
+  collections,
+  activeCollectionId,
+  activeCollection,
+  documents,
+  stats,
+  graphData,
+  graphLoading,
+  graphError,
+  importing,
+  creating,
+  error,
+  newCollectionName,
+  loadGraph,
+  setActiveCollection,
+  createCollection,
+  selectAndImport,
+  deleteDoc
+} = useKnowledgeBase()
 </script>
 
 <template>
@@ -190,6 +82,13 @@ function formatDate(ts) {
       </div>
     </div>
 
+    <KnowledgeGraph
+      :graph-data="graphData"
+      :loading="graphLoading"
+      :error="graphError"
+      @refresh="loadGraph"
+    />
+
     <!-- 导入按钮 -->
     <div class="card">
       <div class="import-section">
@@ -206,15 +105,15 @@ function formatDate(ts) {
             <p class="import-hint">支持 PDF、TXT、MD，可以一次选多个文件</p>
           </div>
         </div>
-        <button class="btn btn-primary" @click="selectAndImport" :disabled="importing">
+        <button class="btn btn-primary" :disabled="importing" @click="selectAndImport">
           {{ importing ? '导入中...' : '选择资料' }}
         </button>
       </div>
-      <div class="error-msg" v-if="error">{{ error }}</div>
+      <div v-if="error" class="error-msg">{{ error }}</div>
     </div>
 
     <!-- 文档列表 -->
-    <div class="card" v-if="documents.length > 0">
+    <div v-if="documents.length > 0" class="card">
       <h2 class="section-title">已经放好的资料</h2>
       <div class="doc-list">
         <div v-for="doc in documents" :key="doc.id" class="doc-item">
@@ -233,7 +132,7 @@ function formatDate(ts) {
               <span class="tag">{{ formatDate(doc.createdAt) }}</span>
             </div>
           </div>
-          <button class="btn-delete" @click="deleteDoc(doc)" title="删除">
+          <button class="btn-delete" title="删除" @click="deleteDoc(doc)">
             <svg
               width="16"
               height="16"
@@ -254,7 +153,7 @@ function formatDate(ts) {
     </div>
 
     <!-- 使用说明 -->
-    <div class="card" v-if="documents.length === 0 && !importing">
+    <div v-if="documents.length === 0 && !importing" class="card">
       <h2 class="section-title">这个资料夹还没有东西</h2>
       <div class="steps">
         <div class="step">
