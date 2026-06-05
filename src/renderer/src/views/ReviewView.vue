@@ -122,6 +122,7 @@ const generateOutline = async () => {
 .chapter-item {
   padding: 10px 12px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
 }
 
@@ -165,6 +166,7 @@ const generateOutline = async () => {
 .tip-item {
   padding: 8px 12px;
   background: var(--xm-info-bg);
+  border: 1px solid rgba(29, 78, 216, 0.12);
   border-radius: var(--xm-radius-sm);
   font-size: 13px;
   font-weight: 600;
@@ -177,13 +179,14 @@ const generateOutline = async () => {
   gap: 10px;
   padding: 10px 12px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   font-size: 14px;
   font-weight: 600;
 }
 .plan-item.highlight {
   background: var(--xm-success-bg);
-  border: 2px solid var(--xm-green);
+  border-color: var(--xm-green);
 }
 .plan-day {
   width: 32px;
@@ -207,6 +210,7 @@ const generateOutline = async () => {
 .feature {
   padding: 12px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
 }
 .feature strong { font-size: 14px; display: block; margin-bottom: 2px; }

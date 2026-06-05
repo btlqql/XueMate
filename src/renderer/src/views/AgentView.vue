@@ -113,8 +113,8 @@ const {
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   padding: 14px 16px;
   background: var(--xm-surface);
   text-align: left;
@@ -125,7 +125,7 @@ const {
 .agent-view .mode-tab.active{
   border-color: var(--xm-green);
   background: #f0fdf4;
-  box-shadow: 0 3px 0 #d9f6cc;
+  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
 }
 
 .agent-view .mode-icon{
@@ -134,7 +134,7 @@ const {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--xm-radius);
+  border-radius: 10px;
   background: var(--xm-surface-soft);
   font-size: 21px;
   flex-shrink: 0;
@@ -182,7 +182,7 @@ const {
 }
 
 .agent-view .live-browser-card{
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--xm-shadow);
 }
 
 .agent-view .control-title-row,
@@ -313,10 +313,11 @@ const {
 .agent-view .summary-box{
   white-space: pre-wrap;
   padding: 14px;
-  border-radius: var(--xm-radius);
+  border-radius: var(--xm-radius-sm);
   line-height: 1.6;
   font-size: 15px;
   font-weight: 700;
+  border: 1px solid rgba(22, 101, 52, 0.12);
 }
 
 
@@ -376,7 +377,8 @@ const {
   gap: 8px;
   padding: 7px 10px;
   border-radius: var(--xm-radius-sm);
-  background: #f8fafc;
+  background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   color: #475569;
   font-size: 12px;
 }
@@ -444,7 +446,14 @@ const {
   padding: 10px 12px;
   border-radius: var(--xm-radius-sm);
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.agent-view .source-item:hover{
+  border-color: var(--xm-blue);
+  background: #f0f9ff;
 }
 
 .agent-view .source-item strong{
@@ -471,8 +480,8 @@ const {
 
 .agent-view .live-browser-box{
   margin-top: 12px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   overflow: hidden;
   background: var(--xm-surface);
   height: clamp(320px, 46vh, 520px);

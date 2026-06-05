@@ -15,11 +15,29 @@ const viewMap = {
 }
 
 const navItems = [
-  { id: 'chat', label: '问学伴' },
-  { id: 'tools', label: '工具箱' },
-  { id: 'knowledge', label: '我的资料' },
-  { id: 'agent', label: '小实验' }
+  {
+    id: 'chat',
+    label: '问学伴',
+    icon: 'M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z'
+  },
+  {
+    id: 'tools',
+    label: '工具箱',
+    icon: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1a6 6 0 0 1-7.9 7.9l-5.6 5.6a2.1 2.1 0 0 1-3-3l5.6-5.6a6 6 0 0 1 7.9-7.9l-3.1 3.1Z'
+  },
+  {
+    id: 'knowledge',
+    label: '我的资料',
+    icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z'
+  },
+  {
+    id: 'agent',
+    label: '小实验',
+    icon: 'M10 2v7.3L5.2 18A2.7 2.7 0 0 0 7.6 22h8.8a2.7 2.7 0 0 0 2.4-4L14 9.3V2M8 2h8M8.5 15h7'
+  }
 ]
+
+const isBrowserPreview = typeof window !== 'undefined' && window.__XUEMATE_BROWSER_PREVIEW__
 </script>
 
 <template>
@@ -45,12 +63,17 @@ const navItems = [
           :class="{ active: currentView === item.id }"
           @click="currentView = item.id"
         >
-          <span class="nav-dot"></span>
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path :d="item.icon" />
+            </svg>
+          </span>
           <span>{{ item.label }}</span>
         </a>
       </nav>
 
       <div class="sidebar-footer">
+        <div v-if="isBrowserPreview" class="preview-pill">浏览器预览</div>
         <div class="user-info">
           <div class="avatar">
             <svg viewBox="0 0 120 120" width="40" height="40">

@@ -318,11 +318,11 @@ function changeScope(scopeId) {
 <style scoped>
 .graph-card {
   background: white;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   padding: 18px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(88, 204, 2, 0.06);
+  box-shadow: var(--xm-shadow-sm);
 }
 
 .graph-header {
@@ -374,7 +374,7 @@ function changeScope(scopeId) {
 
 .graph-stat {
   padding: 10px 12px;
-  border-radius: var(--xm-radius);
+  border-radius: var(--xm-radius-sm);
   background: #f7fbf3;
   border: 1px solid #e1f1d7;
 }
@@ -411,8 +411,8 @@ function changeScope(scopeId) {
   display: flex;
   align-items: center;
   min-width: 280px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   overflow: hidden;
   background: #fff;
 }
@@ -532,9 +532,9 @@ function changeScope(scopeId) {
   width: 100%;
   height: 480px;
   min-height: 480px;
-  border-radius: var(--xm-radius-lg);
+  border-radius: var(--xm-radius-sm);
   overflow: hidden;
-  border: 2px solid var(--xm-border);
+  border: 1px solid var(--xm-border);
   background:
     radial-gradient(circle at 26% 22%, rgba(88, 204, 2, 0.12), transparent 30%),
     radial-gradient(circle at 76% 30%, rgba(255, 200, 0, 0.13), transparent 30%),
@@ -626,8 +626,8 @@ function changeScope(scopeId) {
 
 .node-panel {
   border: 1px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
-  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius-sm);
+  background: #fbfdff;
   padding: 14px;
   overflow: auto;
 }
@@ -797,7 +797,7 @@ function changeScope(scopeId) {
 .graph-empty {
   min-height: 220px;
   border: 1px dashed #b9d9a2;
-  border-radius: var(--xm-radius-lg);
+  border-radius: var(--xm-radius-sm);
   background: var(--xm-surface-soft);
   display: flex;
   flex-direction: column;
@@ -819,7 +819,7 @@ function changeScope(scopeId) {
 .graph-loading {
   min-height: 220px;
   border: 1px dashed #b9d9a2;
-  border-radius: var(--xm-radius-lg);
+  border-radius: var(--xm-radius-sm);
   background: #f7fbf3;
   display: flex;
   align-items: center;

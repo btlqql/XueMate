@@ -78,8 +78,8 @@ const activeComponent = computed(
   align-items: flex-start;
   gap: 4px;
   padding: 14px 16px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   background: var(--xm-surface);
   color: var(--xm-text-light);
   cursor: pointer;
@@ -90,12 +90,13 @@ const activeComponent = computed(
 .tool-tab:hover {
   border-color: var(--xm-border-strong);
   transform: translateY(-1px);
+  box-shadow: var(--xm-shadow-sm);
 }
 
 .tool-tab.active {
   border-color: var(--xm-green);
   background: #f0fdf4;
-  box-shadow: 0 3px 0 #d9f6cc;
+  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
 }
 
 .tool-label {
