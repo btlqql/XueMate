@@ -179,6 +179,7 @@ interface TaskAPI {
 
 declare global {
   interface Window {
+    electron: any
     llm: LLMAPI
     file: FileAPI
     agent: AgentAPI

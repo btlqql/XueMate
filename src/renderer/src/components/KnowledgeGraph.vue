@@ -28,7 +28,6 @@ const {
   legendItems,
   searchPlaceholder,
   searchNode,
-  selectNode,
   fitGraph,
   formatPercent,
   formatDate

@@ -78,7 +78,7 @@ export async function searchCloudLearningResources(
             scores: normalizeScores(source?.scores),
             level: String(source?.level || source?.scores?.level || 'C')
           }))
-          .filter((source) => /^https?:\/\//i.test(source.url))
+          .filter((source: CloudResourceSource) => /^https?:\/\//i.test(source.url))
       : []
   }
 }

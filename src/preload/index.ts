@@ -112,13 +112,24 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  window.electron = electronAPI
-  window.llm = llmAPI
-  window.file = fileAPI
-  window.agent = agentAPI
-  window.chat = chatAPI
-  window.rag = ragAPI
-  window.task = taskAPI
-  window.webAssistant = webAssistantAPI
-  window.quickSearch = quickSearchAPI
+  const globalWindow = window as typeof window & {
+    electron: typeof electronAPI
+    llm: typeof llmAPI
+    file: typeof fileAPI
+    agent: typeof agentAPI
+    chat: typeof chatAPI
+    rag: typeof ragAPI
+    task: typeof taskAPI
+    webAssistant: typeof webAssistantAPI
+    quickSearch: typeof quickSearchAPI
+  }
+  globalWindow.electron = electronAPI
+  globalWindow.llm = llmAPI
+  globalWindow.file = fileAPI
+  globalWindow.agent = agentAPI
+  globalWindow.chat = chatAPI
+  globalWindow.rag = ragAPI
+  globalWindow.task = taskAPI
+  globalWindow.webAssistant = webAssistantAPI
+  globalWindow.quickSearch = quickSearchAPI
 }
