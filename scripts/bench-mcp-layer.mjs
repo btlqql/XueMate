@@ -146,25 +146,38 @@ class McpClient {
   }
 }
 
-async function measureCase(label, directFn, mcpFn) {
+async function measureCase(label, directFn, mcpColdFn, mcpCachedFn = null) {
   const directDurations = []
-  const mcpDurations = []
+  const mcpColdDurations = []
+  const mcpCachedDurations = []
 
   for (let i = 0; i < WARMUP; i += 1) {
     await directFn()
-    await mcpFn()
+    await mcpColdFn()
   }
 
   for (let i = 0; i < SAMPLES; i += 1) {
     directDurations.push((await timed(directFn)).duration)
-    mcpDurations.push((await timed(mcpFn)).duration)
+    mcpColdDurations.push((await timed(mcpColdFn)).duration)
+  }
+
+  if (mcpCachedFn) {
+    await mcpCachedFn() // fill cache once
+    for (let i = 0; i < SAMPLES; i += 1) {
+      mcpCachedDurations.push((await timed(mcpCachedFn)).duration)
+    }
   }
 
   const direct = stats(directDurations)
-  const mcp = stats(mcpDurations)
-  const overheadMs = Number((mcp.avgMs - direct.avgMs).toFixed(2))
+  const mcpCold = stats(mcpColdDurations)
+  const overheadMs = Number((mcpCold.avgMs - direct.avgMs).toFixed(2))
   const overheadPct = Number(((overheadMs / Math.max(direct.avgMs, 0.01)) * 100).toFixed(1))
-  return { label, direct, mcp, overheadMs, overheadPct }
+  const mcpCached = mcpCachedDurations.length ? stats(mcpCachedDurations) : null
+  const cacheSpeedupMs = mcpCached ? Number((mcpCold.avgMs - mcpCached.avgMs).toFixed(2)) : null
+  const cacheSpeedupPct = mcpCached
+    ? Number(((cacheSpeedupMs / Math.max(mcpCold.avgMs, 0.01)) * 100).toFixed(1))
+    : null
+  return { label, direct, mcpCold, mcpCached, overheadMs, overheadPct, cacheSpeedupMs, cacheSpeedupPct }
 }
 
 function markdownReport(report) {
@@ -175,16 +188,17 @@ function markdownReport(report) {
     `- Bridge：\`${report.bridgeUrl}\``,
     `- 样本：warmup=${report.warmup}, samples=${report.samples}`,
     `- Rust binary：\`${report.gatewayBinary}\``,
+    `- MCP 缓存：进程内 TTL 缓存，默认 ${report.cacheTtlMs}ms，可用 \`XUEMATE_MCP_CACHE=off\` 关闭。`,
     '',
     '## 结果',
     '',
-    '| 场景 | Direct HTTP avg | MCP avg | MCP额外耗时 | p95 Direct | p95 MCP |',
-    '|---|---:|---:|---:|---:|---:|'
+    '| 场景 | Direct HTTP avg | MCP cold avg | MCP cached avg | MCP额外耗时 | 缓存节省 | p95 Direct | p95 MCP cold |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|'
   ]
 
   for (const item of report.results) {
     lines.push(
-      `| ${item.label} | ${item.direct.avgMs}ms | ${item.mcp.avgMs}ms | ${item.overheadMs}ms (${item.overheadPct}%) | ${item.direct.p95Ms}ms | ${item.mcp.p95Ms}ms |`
+      `| ${item.label} | ${item.direct.avgMs}ms | ${item.mcpCold.avgMs}ms | ${item.mcpCached ? `${item.mcpCached.avgMs}ms` : '-'} | ${item.overheadMs}ms (${item.overheadPct}%) | ${item.cacheSpeedupMs === null ? '-' : `${item.cacheSpeedupMs}ms (${item.cacheSpeedupPct}%)`} | ${item.direct.p95Ms}ms | ${item.mcpCold.p95Ms}ms |`
     )
   }
 
@@ -193,9 +207,10 @@ function markdownReport(report) {
     '## 结论口径',
     '',
     '- Direct HTTP：Node benchmark 直接请求 Electron `rendererBridge`。',
-    '- MCP：Node benchmark 通过 stdio JSON-RPC 调 Rust MCP Gateway，再由 Gateway 请求同一个 Electron `rendererBridge`。',
+    '- MCP cold：Node benchmark 通过 stdio JSON-RPC 调 Rust MCP Gateway，并传 `noCache=true` 跳过 Gateway 缓存。',
+    '- MCP cached：同一个 Rust MCP Gateway 进程内重复调用同一 tool，命中 TTL 缓存。',
     '- 这个测试不使用 mock；要求本地 XueMate dev app 和真实 SQLite/服务已启动。',
-    '- MCP 路径多一跳，单次延迟通常略高；它的价值在工具标准化、外部 Agent 接入、并发编排和动作队列。'
+    '- 缓存适合 RAG 检索、知识图谱、资料夹/记忆等短时间重复调用；写操作和 quickSearch 默认不缓存。'
   )
 
   return lines.join('\n')
@@ -214,57 +229,53 @@ async function main() {
     })
     mcp.notify('notifications/initialized')
 
+    const retrieveArgs = {
+      query: '分数 学习路径 知识图谱',
+      collectionId: 'all',
+      topK: 4,
+      candidateK: 32,
+      minScore: 0.12,
+      includeContext: true,
+      maxChars: 2600
+    }
+
     const cases = [
       {
         label: 'health',
         direct: () => bridgeGet('/health'),
-        mcp: () => mcp.tool('xuemate.bridge.health')
+        mcpCold: () => mcp.tool('xuemate.bridge.health')
       },
       {
         label: 'rag.collections',
         direct: () => bridgeGet('/api/rag/collections'),
-        mcp: () => mcp.tool('xuemate.rag.collections')
+        mcpCold: () => mcp.tool('xuemate.rag.collections', { noCache: true }),
+        mcpCached: () => mcp.tool('xuemate.rag.collections')
       },
       {
         label: 'learningGraph.default',
         direct: () => bridgeGet('/api/rag/learningGraph?collectionId=default'),
-        mcp: () => mcp.tool('xuemate.learningGraph.get', { collectionId: 'default' })
+        mcpCold: () => mcp.tool('xuemate.learningGraph.get', { collectionId: 'default', noCache: true }),
+        mcpCached: () => mcp.tool('xuemate.learningGraph.get', { collectionId: 'default' })
       },
       {
         label: 'rag.retrieve',
-        direct: () =>
-          bridgePost('/api/rag/retrieve', {
-            query: '分数 学习路径 知识图谱',
-            collectionId: 'all',
-            topK: 4,
-            candidateK: 32,
-            minScore: 0.12,
-            includeContext: true,
-            maxChars: 2600
-          }),
-        mcp: () =>
-          mcp.tool('xuemate.rag.retrieve', {
-            query: '分数 学习路径 知识图谱',
-            collectionId: 'all',
-            topK: 4,
-            candidateK: 32,
-            minScore: 0.12,
-            includeContext: true,
-            maxChars: 2600
-          })
+        direct: () => bridgePost('/api/rag/retrieve', retrieveArgs),
+        mcpCold: () => mcp.tool('xuemate.rag.retrieve', { ...retrieveArgs, noCache: true }),
+        mcpCached: () => mcp.tool('xuemate.rag.retrieve', retrieveArgs)
       }
     ]
 
     const results = []
     for (const item of cases) {
       console.log(`[bench:mcp] ${item.label}`)
-      results.push(await measureCase(item.label, item.direct, item.mcp))
+      results.push(await measureCase(item.label, item.direct, item.mcpCold, item.mcpCached))
     }
 
     const report = {
       generatedAt: new Date().toISOString(),
       bridgeUrl: BRIDGE_URL,
       gatewayBinary: BIN,
+      cacheTtlMs: Number(process.env.XUEMATE_MCP_CACHE_TTL_MS || 15000),
       warmup: WARMUP,
       samples: SAMPLES,
       results
@@ -279,11 +290,12 @@ async function main() {
       results.map((item) => ({
         case: item.label,
         direct_avg_ms: item.direct.avgMs,
-        mcp_avg_ms: item.mcp.avgMs,
+        mcp_cold_avg_ms: item.mcpCold.avgMs,
+        mcp_cached_avg_ms: item.mcpCached?.avgMs ?? null,
         overhead_ms: item.overheadMs,
-        overhead_pct: item.overheadPct,
+        cache_saved_ms: item.cacheSpeedupMs,
         direct_p95_ms: item.direct.p95Ms,
-        mcp_p95_ms: item.mcp.p95Ms
+        mcp_cold_p95_ms: item.mcpCold.p95Ms
       }))
     )
     console.log('[bench:mcp] wrote docs/reports/mcp-benchmark-latest.{json,md}')

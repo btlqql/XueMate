@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 use std::env;
+use std::time::{Duration, Instant};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::Mutex;
 
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
@@ -12,17 +15,41 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "http://127.0.0.1:8788".to_string())
         .trim_end_matches('/')
         .to_string();
+    let cache_ttl_ms = env::var("XUEMATE_MCP_CACHE_TTL_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(15_000);
+    let cache_max_entries = env::var("XUEMATE_MCP_CACHE_MAX_ENTRIES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(128)
+        .max(1);
+    let cache_enabled = cache_ttl_ms > 0
+        && !matches!(
+            env::var("XUEMATE_MCP_CACHE")
+                .unwrap_or_default()
+                .to_lowercase()
+                .as_str(),
+            "off" | "false" | "0" | "no"
+        );
+
     let gateway = Gateway {
         bridge_url,
         client: Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
+            .timeout(Duration::from_secs(30))
             .build()
             .context("failed to build HTTP client")?,
+        cache: Mutex::new(HashMap::new()),
+        cache_ttl: Duration::from_millis(cache_ttl_ms),
+        cache_max_entries,
+        cache_enabled,
     };
 
     eprintln!(
-        "[xuemate-mcp-gateway] stdio server ready, bridge={}",
-        gateway.bridge_url
+        "[xuemate-mcp-gateway] stdio server ready, bridge={}, cache={}, ttl={}ms",
+        gateway.bridge_url,
+        gateway.cache_enabled,
+        gateway.cache_ttl.as_millis()
     );
 
     let stdin = BufReader::new(io::stdin());
@@ -78,15 +105,27 @@ async fn main() -> Result<()> {
 }
 
 async fn write_response(stdout: &mut io::Stdout, value: Value) -> Result<()> {
-    stdout.write_all(serde_json::to_string(&value)?.as_bytes()).await?;
+    stdout
+        .write_all(serde_json::to_string(&value)?.as_bytes())
+        .await?;
     stdout.write_all(b"\n").await?;
     stdout.flush().await?;
     Ok(())
 }
 
+#[derive(Clone)]
+struct CacheEntry {
+    value: Value,
+    expires_at: Instant,
+}
+
 struct Gateway {
     bridge_url: String,
     client: Client,
+    cache: Mutex<HashMap<String, CacheEntry>>,
+    cache_ttl: Duration,
+    cache_max_entries: usize,
+    cache_enabled: bool,
 }
 
 impl Gateway {
@@ -117,28 +156,36 @@ impl Gateway {
             .get("name")
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("tools/call missing params.name"))?;
-        let args = params
+        let raw_args = params
             .get("arguments")
             .cloned()
             .unwrap_or_else(|| json!({}));
+        let no_cache = no_cache(&raw_args);
+        let args = strip_gateway_options(raw_args);
 
         let value = match name {
             "xuemate.bridge.health" => self.get("/health").await?,
-            "xuemate.rag.collections" => self.get("/api/rag/collections").await?,
+            "xuemate.rag.collections" => self.cached_get("/api/rag/collections", !no_cache).await?,
             "xuemate.rag.documents" => {
                 let path = with_collection("/api/rag/documents", &args);
-                self.get(&path).await?
+                self.cached_get(&path, !no_cache).await?
             }
             "xuemate.rag.stats" => {
                 let path = with_collection("/api/rag/stats", &args);
-                self.get(&path).await?
+                self.cached_get(&path, !no_cache).await?
             }
             "xuemate.learningGraph.get" => {
                 let path = with_collection("/api/rag/learningGraph", &args);
-                self.get(&path).await?
+                self.cached_get(&path, !no_cache).await?
             }
-            "xuemate.rag.retrieve" => self.post("/api/rag/retrieve", args).await?,
-            "xuemate.memory.get" => self.get("/api/memory?includeSystemPrompt=1").await?,
+            "xuemate.rag.retrieve" => {
+                self.cached_post("/api/rag/retrieve", args, !no_cache)
+                    .await?
+            }
+            "xuemate.memory.get" => {
+                self.cached_get("/api/memory?includeSystemPrompt=1", !no_cache)
+                    .await?
+            }
             "xuemate.quickSearch.run" => self.post("/api/quick-search/run", args).await?,
             _ => return Err(anyhow!("unknown tool: {name}")),
         };
@@ -160,20 +207,29 @@ impl Gateway {
 
         let value = match uri {
             "xuemate://bridge/health" => self.get("/health").await?,
-            "xuemate://rag/collections" => self.get("/api/rag/collections").await?,
-            "xuemate://memory/profile" => self.get("/api/memory?includeSystemPrompt=1").await?,
+            "xuemate://rag/collections" => self.cached_get("/api/rag/collections", true).await?,
+            "xuemate://memory/profile" => {
+                self.cached_get("/api/memory?includeSystemPrompt=1", true)
+                    .await?
+            }
             uri if uri.starts_with("xuemate://learning-graph/") => {
                 let collection = uri.trim_start_matches("xuemate://learning-graph/");
-                self.get(&format!(
-                    "/api/rag/learningGraph?collectionId={}",
-                    url_encode(collection)
-                ))
+                self.cached_get(
+                    &format!(
+                        "/api/rag/learningGraph?collectionId={}",
+                        url_encode(collection)
+                    ),
+                    true,
+                )
                 .await?
             }
             uri if uri.starts_with("xuemate://memory/archive/") => {
                 let module = uri.trim_start_matches("xuemate://memory/archive/");
-                self.get(&format!("/api/memory/archive?module={}", url_encode(module)))
-                    .await?
+                self.cached_get(
+                    &format!("/api/memory/archive?module={}", url_encode(module)),
+                    true,
+                )
+                .await?
             }
             _ => return Err(anyhow!("unknown resource uri: {uri}")),
         };
@@ -198,6 +254,76 @@ impl Gateway {
         let response = self.client.post(url).json(&body).send().await?;
         parse_response(response).await
     }
+
+    async fn cached_get(&self, path: &str, use_cache: bool) -> Result<Value> {
+        let key = format!("GET {path}");
+        if use_cache {
+            if let Some(value) = self.cache_get(&key).await {
+                return Ok(value);
+            }
+        }
+
+        let value = self.get(path).await?;
+        if use_cache {
+            self.cache_put(key, &value).await;
+        }
+        Ok(value)
+    }
+
+    async fn cached_post(&self, path: &str, body: Value, use_cache: bool) -> Result<Value> {
+        let key = format!("POST {path} {}", serde_json::to_string(&body)?);
+        if use_cache {
+            if let Some(value) = self.cache_get(&key).await {
+                return Ok(value);
+            }
+        }
+
+        let value = self.post(path, body).await?;
+        if use_cache {
+            self.cache_put(key, &value).await;
+        }
+        Ok(value)
+    }
+
+    async fn cache_get(&self, key: &str) -> Option<Value> {
+        if !self.cache_enabled {
+            return None;
+        }
+
+        let now = Instant::now();
+        let mut cache = self.cache.lock().await;
+        match cache.get(key) {
+            Some(entry) if entry.expires_at > now => Some(entry.value.clone()),
+            Some(_) => {
+                cache.remove(key);
+                None
+            }
+            None => None,
+        }
+    }
+
+    async fn cache_put(&self, key: String, value: &Value) {
+        if !self.cache_enabled {
+            return;
+        }
+
+        let now = Instant::now();
+        let mut cache = self.cache.lock().await;
+        cache.retain(|_, entry| entry.expires_at > now);
+        while cache.len() >= self.cache_max_entries {
+            let Some(first_key) = cache.keys().next().cloned() else {
+                break;
+            };
+            cache.remove(&first_key);
+        }
+        cache.insert(
+            key,
+            CacheEntry {
+                value: value.clone(),
+                expires_at: now + self.cache_ttl,
+            },
+        );
+    }
 }
 
 async fn parse_response(response: reqwest::Response) -> Result<Value> {
@@ -216,6 +342,21 @@ fn with_collection(path: &str, args: &Value) -> String {
         .filter(|value| !value.is_empty())
         .unwrap_or("all");
     format!("{path}?collectionId={}", url_encode(collection))
+}
+
+fn no_cache(args: &Value) -> bool {
+    args.get("noCache")
+        .or_else(|| args.get("no_cache"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn strip_gateway_options(mut args: Value) -> Value {
+    if let Value::Object(map) = &mut args {
+        map.remove("noCache");
+        map.remove("no_cache");
+    }
+    args
 }
 
 fn url_encode(value: &str) -> String {
@@ -249,17 +390,17 @@ fn tools() -> Value {
         {
             "name": "xuemate.rag.collections",
             "description": "列出 XueMate 知识库资料夹。",
-            "inputSchema": schema(Map::new(), vec![])
+            "inputSchema": schema(map([("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.rag.documents",
             "description": "列出指定资料夹中的文档。",
-            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "default" }))]), vec![])
+            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "default" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.rag.stats",
             "description": "读取指定资料夹的 RAG 文档/片段统计。",
-            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" }))]), vec![])
+            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.rag.retrieve",
@@ -272,18 +413,19 @@ fn tools() -> Value {
                 ("minScore", json!({ "type": "number", "default": 0.18, "minimum": 0, "maximum": 1 })),
                 ("useMmr", json!({ "type": "boolean", "default": true })),
                 ("includeContext", json!({ "type": "boolean", "default": true })),
-                ("maxChars", json!({ "type": "integer", "default": 3600, "minimum": 500, "maximum": 12000 }))
+                ("maxChars", json!({ "type": "integer", "default": 3600, "minimum": 500, "maximum": 12000 })),
+                ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))
             ]), vec!["query"])
         },
         {
             "name": "xuemate.learningGraph.get",
             "description": "生成资料、知识点、记忆和复习任务融合后的学习图谱。",
-            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" }))]), vec![])
+            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.memory.get",
             "description": "读取学生长期记忆、学习画像、薄弱点和系统提示词。",
-            "inputSchema": schema(Map::new(), vec![])
+            "inputSchema": schema(map([("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.quickSearch.run",
