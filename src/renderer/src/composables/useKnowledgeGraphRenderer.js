@@ -82,6 +82,10 @@ export function useKnowledgeGraphRenderer(props) {
   watch(
     () => props.graphData,
     async () => {
+      selectedNode.value = null
+      selectedLinks.value = []
+      activeType.value = 'all'
+      graphCanvasReady.value = false
       await nextTick()
       scheduleRender(120)
     },
@@ -258,6 +262,7 @@ export function useKnowledgeGraphRenderer(props) {
 
     const signature = graphSignature()
     if (renderer && signature === lastRenderedSignature) {
+      applyGraphViewportPadding()
       renderer.refresh()
       graphCanvasReady.value = true
       return
@@ -335,6 +340,7 @@ export function useKnowledgeGraphRenderer(props) {
         minCameraRatio: 0.08,
         maxCameraRatio: 4
       })
+      applyGraphViewportPadding()
 
       renderer.on('clickNode', ({ node }) => selectNode(node, true))
       renderer.on('clickStage', () => {
@@ -345,7 +351,10 @@ export function useKnowledgeGraphRenderer(props) {
       graphCanvasReady.value = true
       renderStage.value = '真实图谱已打开'
       requestAnimationFrame(() => {
-        if (renderer && isContainerRenderable()) renderer.refresh()
+        if (renderer && isContainerRenderable()) {
+          fitGraph(false)
+          renderer.refresh()
+        }
       })
       refreshReducers()
     } catch (error) {
@@ -359,7 +368,8 @@ export function useKnowledgeGraphRenderer(props) {
   function refreshReducers() {
     if (!renderer || !graph) return
     const selectedId = selectedNode.value?.id || ''
-    const selectedNeighbors = new Set(selectedId ? graph.neighbors(selectedId) : [])
+    const validSelectedId = selectedId && graph.hasNode(selectedId) ? selectedId : ''
+    const selectedNeighbors = new Set(validSelectedId ? graph.neighbors(validSelectedId) : [])
     const filterType = activeType.value
 
     renderer.setSetting('nodeReducer', (node, data) => {
@@ -369,13 +379,13 @@ export function useKnowledgeGraphRenderer(props) {
         next.hidden = true
         return next
       }
-      if (selectedId && node !== selectedId && !selectedNeighbors.has(node)) {
+      if (validSelectedId && node !== validSelectedId && !selectedNeighbors.has(node)) {
         next.color = '#d4d4d8'
         next.label = ''
         next.size = Math.max(3, data.size * 0.62)
         next.zIndex = 0
       }
-      if (node === selectedId) {
+      if (node === validSelectedId) {
         next.size = data.size * 1.35
         next.highlighted = true
         next.zIndex = 10
@@ -389,7 +399,7 @@ export function useKnowledgeGraphRenderer(props) {
         filterType === 'all' ||
         extremities.some((node) => graph.getNodeAttribute(node, 'nodeKind') === filterType)
       if (!visibleByType) return { ...data, hidden: true }
-      if (selectedId && !extremities.includes(selectedId)) {
+      if (validSelectedId && !extremities.includes(validSelectedId)) {
         return { ...data, color: 'rgba(185, 217, 162, 0.24)', size: 0.4 }
       }
       return data
@@ -416,9 +426,57 @@ export function useKnowledgeGraphRenderer(props) {
     }
   }
 
-  function fitGraph() {
+  function graphBoundsWithPadding(paddingRatio = 0.18) {
+    if (!graph || graph.order === 0) return null
+    let minX = Infinity
+    let maxX = -Infinity
+    let minY = Infinity
+    let maxY = -Infinity
+    graph.forEachNode((node) => {
+      const attrs = graph.getNodeAttributes(node)
+      const x = Number(attrs.x || 0)
+      const y = Number(attrs.y || 0)
+      minX = Math.min(minX, x)
+      maxX = Math.max(maxX, x)
+      minY = Math.min(minY, y)
+      maxY = Math.max(maxY, y)
+    })
+    if (![minX, maxX, minY, maxY].every(Number.isFinite)) return null
+
+    const dx = Math.max(0.2, maxX - minX)
+    const dy = Math.max(0.2, maxY - minY)
+    const padX = dx * paddingRatio
+    const padY = dy * paddingRatio
+    return {
+      x: [minX - padX, maxX + padX],
+      y: [minY - padY, maxY + padY],
+      center: {
+        x: (minX + maxX) / 2,
+        y: (minY + maxY) / 2
+      }
+    }
+  }
+
+  function applyGraphViewportPadding() {
+    if (!renderer || !graph) return
+    const bounds = graphBoundsWithPadding()
+    if (!bounds) return
+    renderer.setCustomBBox({ x: bounds.x, y: bounds.y })
+  }
+
+  function fitGraph(animate = true) {
     if (!renderer) return
-    renderer.getCamera().animatedReset({ duration: 420 })
+    applyGraphViewportPadding()
+    const bounds = graphBoundsWithPadding()
+    const state = {
+      x: bounds?.center.x || 0,
+      y: bounds?.center.y || 0,
+      ratio: 1,
+      angle: 0
+    }
+    if (animate) renderer.getCamera().animate(state, { duration: 420 })
+    else renderer.getCamera().setState(state)
+    renderer.refresh()
   }
 
   function searchNode() {
