@@ -1,4 +1,5 @@
 <script setup>
+import { nextTick, ref } from 'vue'
 import KnowledgeGraph from '../components/KnowledgeGraph.vue'
 import { formatKnowledgeDate as formatDate, useKnowledgeBase } from '../composables/useKnowledgeBase'
 
@@ -25,6 +26,48 @@ const {
   selectAndImport,
   deleteDoc
 } = useKnowledgeBase()
+
+const docsCardRef = ref(null)
+const docRefs = ref({})
+const locatedDocId = ref('')
+const locatedArticle = ref(null)
+
+function setDocRef(id, el) {
+  if (!id) return
+  if (el) docRefs.value[id] = el
+  else delete docRefs.value[id]
+}
+
+function resolveDocumentId(source) {
+  if (source?.documentId) return source.documentId
+  if (!source?.fileName) return ''
+  return documents.value.find((doc) => doc.fileName === source.fileName)?.id || ''
+}
+
+async function locateDocument(source) {
+  if (!source) return
+
+  if (
+    source.collectionId &&
+    source.collectionId !== 'all' &&
+    source.collectionId !== activeCollectionId.value
+  ) {
+    await setActiveCollection(source.collectionId)
+  }
+
+  await nextTick()
+  const documentId = resolveDocumentId(source)
+  locatedDocId.value = documentId
+  locatedArticle.value = {
+    ...source,
+    documentId,
+    fileName: source.fileName || documents.value.find((doc) => doc.id === documentId)?.fileName || '关联资料'
+  }
+
+  await nextTick()
+  const target = docRefs.value[documentId] || docsCardRef.value
+  target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+}
 </script>
 
 <template>
@@ -95,6 +138,7 @@ const {
       :scope-name="activeGraphScope?.name || '全部图谱'"
       @refresh="loadGraph"
       @scope-change="setActiveGraph"
+      @locate-document="locateDocument"
     />
 
     <!-- 导入按钮 -->
@@ -121,10 +165,27 @@ const {
     </div>
 
     <!-- 文档列表 -->
-    <div v-if="documents.length > 0" class="card">
+    <div v-if="documents.length > 0" ref="docsCardRef" class="card">
       <h2 class="section-title">已经放好的资料</h2>
+      <div v-if="locatedArticle" class="located-source">
+        <div>
+          <strong>已定位到文章</strong>
+          <p>{{ locatedArticle.fileName }}</p>
+          <span v-if="locatedArticle.startPos !== undefined">
+            片段位置：{{ locatedArticle.startPos }} - {{ locatedArticle.endPos }}
+          </span>
+        </div>
+        <em v-if="locatedArticle.sourceNodeLabel">来自：{{ locatedArticle.sourceNodeLabel }}</em>
+      </div>
       <div class="doc-list">
-        <div v-for="doc in documents" :key="doc.id" class="doc-item">
+        <div
+          v-for="doc in documents"
+          :key="doc.id"
+          :ref="(el) => setDocRef(doc.id, el)"
+          class="doc-item"
+          :class="{ located: locatedDocId === doc.id }"
+          :data-doc-id="doc.id"
+        >
           <div class="doc-icon">
             <svg viewBox="0 0 24 24" width="20" height="20">
               <path
@@ -138,6 +199,10 @@ const {
             <div class="doc-meta">
               <span class="tag tag-blue">{{ doc.chunkCount }} 小段</span>
               <span class="tag">{{ formatDate(doc.createdAt) }}</span>
+            </div>
+            <div v-if="locatedDocId === doc.id && locatedArticle?.snippet" class="chunk-preview">
+              <strong>图谱定位片段</strong>
+              <p>{{ locatedArticle.snippet }}</p>
             </div>
           </div>
           <button class="btn-delete" title="删除" @click="deleteDoc(doc)">
@@ -346,13 +411,58 @@ const {
   margin-top: 12px;
 }
 
+.located-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e1f1d7;
+  border-radius: 14px;
+  background: #f7fbf3;
+}
+
+.located-source strong {
+  display: block;
+  color: var(--xm-green-dark);
+  font-size: 13px;
+  font-weight: 900;
+  margin-bottom: 3px;
+}
+
+.located-source p {
+  color: #333;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.located-source span,
+.located-source em {
+  color: #8aa47b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .doc-item {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
   background: #f7f7f7;
+  border: 2px solid transparent;
   border-radius: 10px;
+  transition:
+    border-color 0.18s,
+    background 0.18s,
+    box-shadow 0.18s;
+}
+
+.doc-item.located {
+  border-color: var(--xm-green);
+  background: #edf9ef;
+  box-shadow: 0 8px 22px rgba(88, 204, 2, 0.15);
 }
 
 .doc-icon {
@@ -369,6 +479,28 @@ const {
 .doc-meta {
   display: flex;
   gap: 6px;
+}
+
+.chunk-preview {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px dashed #bfe7c2;
+  background: #ffffff;
+}
+
+.chunk-preview strong {
+  display: block;
+  color: var(--xm-green-dark);
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 5px;
+}
+
+.chunk-preview p {
+  color: #666;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .btn-delete {

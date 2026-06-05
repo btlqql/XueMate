@@ -2,13 +2,23 @@ import http from 'node:http'
 import { URL } from 'node:url'
 import { createHash } from 'node:crypto'
 
-const PORT = Number(process.env.XUEMATE_CLOUD_PORT || process.env.PORT || 8787)
 const HOST = process.env.XUEMATE_CLOUD_HOST || '127.0.0.1'
-const CACHE_TTL_MS = Number(process.env.XUEMATE_CLOUD_CACHE_TTL_MS || 10 * 60 * 1000)
-const FETCH_TIMEOUT_MS = Number(process.env.XUEMATE_CLOUD_FETCH_TIMEOUT_MS || 9000)
-const MAX_PAGE_CHARS = Number(process.env.XUEMATE_CLOUD_MAX_PAGE_CHARS || 5000)
+const PORT = parsePositiveIntEnv('XUEMATE_CLOUD_PORT', parsePositiveIntEnv('PORT', 8787, 1, 65535), 1, 65535)
+const CACHE_TTL_MS = parsePositiveIntEnv('XUEMATE_CLOUD_CACHE_TTL_MS', 10 * 60 * 1000, 30 * 1000, 60 * 60 * 1000)
+const CACHE_MAX_ENTRIES = parsePositiveIntEnv('XUEMATE_CLOUD_CACHE_MAX_ENTRIES', 250, 20, 5000)
+const TASK_MAX_ENTRIES = parsePositiveIntEnv('XUEMATE_CLOUD_TASK_MAX_ENTRIES', 300, 20, 5000)
+const TASK_TTL_MS = parsePositiveIntEnv('XUEMATE_CLOUD_TASK_TTL_MS', 30 * 60 * 1000, 60 * 1000, 24 * 60 * 60 * 1000)
+const FETCH_TIMEOUT_MS = parsePositiveIntEnv('XUEMATE_CLOUD_FETCH_TIMEOUT_MS', 9000, 1000, 60000)
+const SEARXNG_TIMEOUT_MS = parsePositiveIntEnv('XUEMATE_CLOUD_SEARXNG_TIMEOUT_MS', Math.min(FETCH_TIMEOUT_MS, 2500), 500, FETCH_TIMEOUT_MS)
+const DIRECT_SEARCH_TIMEOUT_MS = parsePositiveIntEnv('XUEMATE_CLOUD_DIRECT_SEARCH_TIMEOUT_MS', Math.min(FETCH_TIMEOUT_MS, 3500), 500, FETCH_TIMEOUT_MS)
+const CRAWL4AI_TIMEOUT_MS = parsePositiveIntEnv('XUEMATE_CLOUD_CRAWL4AI_TIMEOUT_MS', 6500, 1000, 60000)
+const MAX_PAGE_CHARS = parsePositiveIntEnv('XUEMATE_CLOUD_MAX_PAGE_CHARS', 5000, 500, 50000)
 const SEARXNG_URL = (process.env.SEARXNG_URL || 'http://127.0.0.1:8080').replace(/\/$/, '')
-const CRAWL4AI_URL = (process.env.CRAWL4AI_URL || 'http://127.0.0.1:11235').replace(/\/$/, '')
+const CRAWL4AI_URL = (process.env.CRAWL4AI_URL || '').replace(/\/$/, '')
+const CRAWL4AI_ENABLED = process.env.CRAWL4AI_ENABLED === 'true' && Boolean(CRAWL4AI_URL)
+const CRAWL4AI_API_TOKEN = process.env.CRAWL4AI_API_TOKEN || ''
+const FAST_MODE = process.env.XUEMATE_CLOUD_FAST_MODE !== 'false'
+const PAGE_FETCH_CONCURRENCY = parsePositiveIntEnv('XUEMATE_CLOUD_PAGE_FETCH_CONCURRENCY', 4, 1, 12)
 
 const tasks = new Map()
 const cache = new Map()
@@ -22,6 +32,42 @@ const metrics = {
   fetchErrors: 0,
   totalLatencyMs: 0,
   lastRequestAt: null
+}
+
+function parsePositiveIntEnv(name, fallback, min, max) {
+  const raw = process.env[name]
+  const parsed = raw === undefined || String(raw).trim() === '' ? fallback : Number(raw)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(min, Math.min(Math.floor(parsed), max))
+}
+
+function pruneMapByLimit(map, maxEntries) {
+  while (map.size > maxEntries) {
+    const oldestKey = map.keys().next().value
+    if (oldestKey === undefined) break
+    map.delete(oldestKey)
+  }
+}
+
+function pruneCache() {
+  const now = Date.now()
+  for (const [key, entry] of cache.entries()) {
+    if (!entry?.cachedAt || now - entry.cachedAt >= CACHE_TTL_MS) {
+      cache.delete(key)
+    }
+  }
+  pruneMapByLimit(cache, CACHE_MAX_ENTRIES)
+}
+
+function pruneTasks() {
+  const now = Date.now()
+  for (const [key, task] of tasks.entries()) {
+    const updatedAt = Date.parse(task?.updatedAt || task?.createdAt || '')
+    if (Number.isFinite(updatedAt) && now - updatedAt >= TASK_TTL_MS) {
+      tasks.delete(key)
+    }
+  }
+  pruneMapByLimit(tasks, TASK_MAX_ENTRIES)
 }
 
 function json(res, status, payload) {
@@ -181,9 +227,9 @@ function extractSearchLinks(html, baseUrl) {
   return links.slice(0, 8)
 }
 
-async function fetchText(url) {
+async function fetchText(url, timeoutMs = FETCH_TIMEOUT_MS) {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   metrics.fetches++
   try {
     const response = await fetch(url, {
@@ -253,7 +299,7 @@ function scoreResource({ query = '', title = '', url = '', text = '' }) {
   try {
     const host = new URL(url).hostname
     if (/\.edu\.cn$|\.edu$|\.gov\.cn$|\.gov$/.test(host)) trustBase += 24
-    if (/wikipedia|baike|python|scratch|khanacademy|coursera|bilibili|cnblogs|csdn/i.test(host)) trustBase += 10
+    if (/wikipedia|baike|python|scratch|khanacademy|coursera|bilibili|cnblogs|csdn|runoob|imooc|segmentfault/i.test(host)) trustBase += 10
     if (/download|apk|coupon|casino|bet|loan/i.test(host)) trustBase -= 30
   } catch {
     trustBase -= 10
@@ -291,16 +337,97 @@ function summarizeFromSources(query, sources) {
   ].join('')
 }
 
+function buildSearchQueries(query) {
+  const normalized = normalizeText(query, 120)
+  const simplified = normalizeText(
+    normalized.replace(/小学生|小学|孩子|儿童|少儿|动画|课程|教程|讲解|图解|入门|适合|学习|资源/g, ' '),
+    80
+  )
+  const variants = [normalized, simplified]
+
+  if (/python/i.test(normalized) && /冒泡|bubble/i.test(normalized)) {
+    variants.push('Python 冒泡排序', 'Python 冒泡排序 菜鸟教程')
+  }
+
+  return [...new Set(variants.filter((item) => item && item.length >= 2))]
+}
+
+function getCuratedLearningLinks(query) {
+  const normalized = String(query || '').toLowerCase()
+  if (!/python/.test(normalized) || !/冒泡|bubble/.test(normalized)) return []
+
+  return [
+    {
+      title: 'Python 冒泡排序 | 菜鸟教程',
+      url: 'https://www.runoob.com/python3/python-bubble-sort.html',
+      snippet: 'Python 冒泡排序入门教程，适合用来解释排序步骤和代码实现。',
+      engine: 'xuemate-seed'
+    },
+    {
+      title: '看动画学算法之：排序 - 冒泡排序',
+      url: 'https://www.cnblogs.com/flydean/p/algorithm-bubble-sort.html',
+      snippet: '用动画方式讲解冒泡排序过程，适合课堂演示。',
+      engine: 'xuemate-seed'
+    },
+    {
+      title: '冒泡排序 - Python 算法入门教程',
+      url: 'https://m.imooc.com/wiki/pythonalgorithm-pythonbubblesort',
+      snippet: 'Python 算法入门中的冒泡排序讲解。',
+      engine: 'xuemate-seed'
+    },
+    {
+      title: 'Python 实现冒泡排序 Bubble Sort',
+      url: 'https://segmentfault.com/a/1190000022687027',
+      snippet: 'Python 排序算法文章，包含冒泡排序代码与说明。',
+      engine: 'xuemate-seed'
+    }
+  ]
+}
+
+function mergeCandidateLinks(...groups) {
+  const seen = new Set()
+  const merged = []
+  for (const group of groups) {
+    for (const item of group || []) {
+      if (!/^https?:\/\//i.test(item.url || '') || seen.has(item.url)) continue
+      seen.add(item.url)
+      merged.push(item)
+    }
+  }
+  return merged.slice(0, 12)
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length)
+  let cursor = 0
+  const workerCount = Math.max(1, Math.min(Number(concurrency) || 1, items.length))
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (cursor < items.length) {
+        const index = cursor++
+        try {
+          results[index] = await worker(items[index], index)
+        } catch (error) {
+          results[index] = { error }
+        }
+      }
+    })
+  )
+
+  return results
+}
+
 
 async function searchWithSearxng(query) {
-  const url = `${SEARXNG_URL}/search?q=${encodeURIComponent(query)}&format=json&language=zh-CN&categories=general`
+  const url = `${SEARXNG_URL}/search?q=${encodeURIComponent(query)}&format=json`
   try {
     const response = await fetch(url, {
       headers: {
         Accept: 'application/json',
         'User-Agent': 'XueMate-Cloud-Gateway/0.1'
       },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+      signal: AbortSignal.timeout(SEARXNG_TIMEOUT_MS)
     })
     if (!response.ok) throw new Error(`SearXNG HTTP ${response.status}`)
     const payload = await response.json()
@@ -325,38 +452,52 @@ async function searchWithSearxng(query) {
   }
 }
 
-async function crawlWithCrawl4AI(url) {
+async function searchWithDirect(query) {
+  const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}`
   try {
-    const response = await fetch(`${CRAWL4AI_URL}/crawl`, {
+    const searchPage = await fetchText(searchUrl, DIRECT_SEARCH_TIMEOUT_MS)
+    return extractSearchLinks(searchPage.html || '', searchPage.url || searchUrl)
+  } catch (error) {
+    console.warn('[Gateway] Direct search unavailable:', error.message || error)
+    return null
+  }
+}
+
+async function crawlWithCrawl4AI(url) {
+  if (!CRAWL4AI_ENABLED) return null
+
+  try {
+    const response = await fetch(`${CRAWL4AI_URL}/crawl_sync`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': 'XueMate-Cloud-Gateway/0.1'
+        'User-Agent': 'XueMate-Cloud-Gateway/0.1',
+        ...(CRAWL4AI_API_TOKEN ? { Authorization: `Bearer ${CRAWL4AI_API_TOKEN}` } : {})
       },
       body: JSON.stringify({
-        urls: [url],
-        browser_config: {
-          headless: true,
-          text_mode: true
-        },
-        crawler_config: {
-          word_count_threshold: 8,
-          excluded_tags: ['script', 'style', 'nav', 'footer', 'header', 'form', 'svg'],
-          remove_overlay_elements: true,
-          only_text: false
-        }
+        urls: url,
+        word_count_threshold: 8,
+        screenshot: false,
+        magic: false,
+        cache_mode: 'enabled'
       }),
-      signal: AbortSignal.timeout(Math.max(FETCH_TIMEOUT_MS, 15000))
+      signal: AbortSignal.timeout(CRAWL4AI_TIMEOUT_MS)
     })
     if (!response.ok) throw new Error(`Crawl4AI HTTP ${response.status}`)
     const payload = await response.json()
-    const result = Array.isArray(payload.results) ? payload.results[0] : null
-    if (!payload.success || !result) throw new Error(payload.msg || 'empty crawl result')
+    const result = Array.isArray(payload.results) ? payload.results[0] : payload.result || null
+    if (!result || payload.status === 'failed' || result.success === false) {
+      throw new Error(payload.msg || result?.error_message || 'empty crawl result')
+    }
     const markdown =
       typeof result.markdown === 'string'
         ? result.markdown
-        : result.markdown?.raw_markdown || result.markdown?.fit_markdown || ''
+        : result.markdown?.raw_markdown ||
+          result.markdown?.fit_markdown ||
+          result.markdown_v2?.raw_markdown ||
+          result.markdown_v2?.fit_markdown ||
+          ''
     return {
       url: result.url || url,
       title: result.metadata?.title || result.title || '网页资源',
@@ -368,12 +509,29 @@ async function crawlWithCrawl4AI(url) {
   }
 }
 
+async function fetchResourcePage(link) {
+  const page = await crawlWithCrawl4AI(link.url)
+  if (page?.text) return page
+
+  if (FAST_MODE && link.snippet) {
+    return {
+      url: link.url,
+      title: link.title || '网页资源',
+      text: link.snippet
+    }
+  }
+
+  return fetchText(link.url, FAST_MODE ? Math.min(FETCH_TIMEOUT_MS, 1800) : FETCH_TIMEOUT_MS)
+}
+
 async function handleResourceSearch(body) {
   const query = String(body.query || '').trim()
   const limit = Math.max(1, Math.min(Number(body.limit || 4), 6))
   if (!query) throw new Error('query is required')
 
   metrics.searches++
+  pruneCache()
+  pruneTasks()
   const cacheKey = `search:${query}:${limit}`
   const cached = cache.get(cacheKey)
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
@@ -392,41 +550,92 @@ async function handleResourceSearch(body) {
     updatedAt: new Date().toISOString()
   }
   tasks.set(task.id, task)
+  pruneTasks()
 
   pushStage(task, 'query-normalize', 'done', `标准化查询：${query}`)
-  const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}`
-  pushStage(task, 'network-search', 'running', '调用 SearXNG 搜索聚合服务')
-  let links = await searchWithSearxng(query)
-  if (links) {
-    pushStage(task, 'network-search', 'done', `SearXNG 返回 ${links.length} 个候选结果`)
+  const searchQueries = buildSearchQueries(query)
+  const curatedLinks = getCuratedLearningLinks(query)
+  let links = []
+  let usedSearchQuery = searchQueries[0]
+  pushStage(task, 'query-rewrite', 'done', `搜索改写：${searchQueries.join(' / ')}`)
+
+  if (FAST_MODE && curatedLinks.length >= limit) {
+    links = curatedLinks
+    usedSearchQuery = 'xuemate-learning-seed'
+    pushStage(task, 'learning-seed', 'done', `快搜命中 ${curatedLinks.length} 个编程学习种子源，跳过慢搜索`)
   } else {
-    pushStage(task, 'network-search', 'running', 'SearXNG 不可用，回退到直接搜索结果页抓取')
-    const searchPage = await fetchText(searchUrl)
-    links = extractSearchLinks(searchPage.html || '', searchPage.url || searchUrl)
-    pushStage(task, 'network-search', 'done', `直接搜索回退返回 ${links.length} 个候选结果`)
+    const searchQueriesToTry = FAST_MODE ? searchQueries.slice(0, 2) : searchQueries
+    const fallbackQuery = searchQueries.at(-1) || query
+    pushStage(
+      task,
+      'network-search',
+      'running',
+      `并发搜索：SearXNG x${searchQueriesToTry.length} + 直接搜索回退`
+    )
+
+    const searchResults = await Promise.all([
+      ...searchQueriesToTry.map(async (candidateQuery) => ({
+        source: 'SearXNG',
+        query: candidateQuery,
+        links: (await searchWithSearxng(candidateQuery)) || []
+      })),
+      {
+        source: 'Direct',
+        query: fallbackQuery,
+        links: (await searchWithDirect(fallbackQuery)) || []
+      }
+    ])
+
+    for (const result of searchResults) {
+      pushStage(task, 'network-search', 'done', `${result.source}「${result.query}」返回 ${result.links.length} 个候选结果`)
+    }
+
+    const rankedResults = searchResults
+      .filter((result) => result.links.length)
+      .sort((a, b) => b.links.length - a.links.length)
+
+    if (rankedResults.length) {
+      links = mergeCandidateLinks(...rankedResults.map((result) => result.links))
+      usedSearchQuery = `${rankedResults[0].source}:${rankedResults[0].query}`
+    }
+
+    if (curatedLinks.length) {
+      links = mergeCandidateLinks(curatedLinks, links)
+      pushStage(task, 'learning-seed', 'done', `加入 ${curatedLinks.length} 个编程学习种子源`)
+    }
   }
 
   pushStage(task, 'link-extract', 'done', `候选链接 ${links.length} 个`)
 
-  const sources = []
-  for (const link of links.slice(0, Math.max(limit + 2, 4))) {
+  const crawlLimit = Math.min(links.length, Math.max(limit, FAST_MODE ? limit : limit + 2))
+  const crawlCandidates = links.slice(0, crawlLimit)
+  pushStage(task, 'page-fetch', 'running', `并发抽取 ${crawlCandidates.length} 个候选页，并发度 ${PAGE_FETCH_CONCURRENCY}`)
+
+  const sourceResults = await mapWithConcurrency(crawlCandidates, PAGE_FETCH_CONCURRENCY, async (link) => {
     try {
-      pushStage(task, 'page-fetch', 'running', `Crawl4AI 抽取：${link.url}`)
-      const page = (await crawlWithCrawl4AI(link.url)) || (await fetchText(link.url))
+      pushStage(
+        task,
+        'page-fetch',
+        'running',
+        CRAWL4AI_ENABLED ? `Crawl4AI 抽取：${link.url}` : `直接网页抽取：${link.url}`
+      )
+      const page = await fetchResourcePage(link)
       const title = link.title || page.title
       const text = page.text || link.snippet || ''
       const scores = scoreResource({ query, title, url: page.url || link.url, text })
-      sources.push({
+      return {
         title,
         url: page.url || link.url,
         text: text.slice(0, 1200),
         scores,
         level: scores.level
-      })
+      }
     } catch (error) {
       pushStage(task, 'page-fetch', 'error', `${link.url}：${error.message || error}`)
+      return null
     }
-  }
+  })
+  const sources = sourceResults.filter((item) => item?.scores)
 
   const sortedSources = sources.sort((a, b) => b.scores.overall - a.scores.overall).slice(0, limit)
   pushStage(task, 'resource-score', 'done', `完成 ${sortedSources.length} 个资源评分`)
@@ -436,6 +645,7 @@ async function handleResourceSearch(body) {
     taskId: task.id,
     mode: 'cloud-resource-search',
     query,
+    usedSearchQuery,
     elapsedMs: Date.now() - started,
     cacheHit: false,
     stages: task.stages,
@@ -447,6 +657,8 @@ async function handleResourceSearch(body) {
   task.result = value
   task.updatedAt = new Date().toISOString()
   cache.set(cacheKey, { cachedAt: Date.now(), value })
+  pruneCache()
+  pruneTasks()
   return value
 }
 
@@ -478,6 +690,8 @@ async function router(req, res) {
     }
 
     if (req.method === 'GET' && parsedUrl.pathname === '/api/metrics') {
+      pruneCache()
+      pruneTasks()
       const avgLatencyMs = metrics.requests ? Math.round(metrics.totalLatencyMs / metrics.requests) : 0
       return json(res, 200, {
         success: true,
@@ -485,12 +699,15 @@ async function router(req, res) {
           ...metrics,
           avgLatencyMs,
           cacheSize: cache.size,
-          taskCount: tasks.size
+          taskCount: tasks.size,
+          cacheMaxEntries: CACHE_MAX_ENTRIES,
+          taskMaxEntries: TASK_MAX_ENTRIES
         }
       })
     }
 
     if (req.method === 'GET' && parsedUrl.pathname.startsWith('/api/tasks/')) {
+      pruneTasks()
       const id = decodeURIComponent(parsedUrl.pathname.split('/').pop() || '')
       const task = tasks.get(id)
       if (!task) return json(res, 404, { success: false, error: 'task not found' })

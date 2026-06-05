@@ -1,0 +1,12 @@
+services:
+  gateway:
+    image: docker.m.daocloud.io/library/node:25-alpine
+
+  searxng:
+    image: docker.m.daocloud.io/searxng/searxng:latest
+
+  searxng-valkey:
+    image: docker.m.daocloud.io/valkey/valkey:9-alpine
+
+  crawl4ai:
+    image: docker.m.daocloud.io/unclecode/crawl4ai:basic-amd64

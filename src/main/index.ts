@@ -401,7 +401,13 @@ function registerLLMHandlers(): void {
               content: fullContent,
               timestamp: Date.now()
             }
-            chatStore.addMessage(convId, assistantMsg)
+            try {
+              if (chatStore.getConversation(convId)) {
+                chatStore.addMessage(convId, assistantMsg)
+              }
+            } catch (e) {
+              console.error('[Chat] 保存流式回复失败:', e)
+            }
             if (win && !win.isDestroyed()) {
               win.webContents.send('chat:stream-done', fullContent)
             }

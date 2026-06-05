@@ -316,7 +316,7 @@ async function extractPageFromRenderer(webContents: Electron.WebContents): Promi
             text: String(link?.text || '').trim().slice(0, 100),
             href: String(link?.href || '').trim()
           }))
-          .filter((link) => link.text && /^https?:\/\//i.test(link.href))
+          .filter((link: { text: string; href: string }) => link.text && /^https?:\/\//i.test(link.href))
           .slice(0, 30)
       : []
   }
@@ -534,14 +534,16 @@ export async function searchAndFetch(query: string): Promise<PageResult[]> {
 
   const pages: PageResult[] = [result]
 
-  for (const link of resultLinks) {
-    try {
-      const page = await fetchPage(link.href)
-      pages.push(page)
-    } catch {
-      // 跳过
-    }
-  }
+  const linkedPages = await Promise.all(
+    resultLinks.map(async (link) => {
+      try {
+        return await fetchPageWithNet(link.href)
+      } catch {
+        return null
+      }
+    })
+  )
+  pages.push(...linkedPages.filter((page): page is PageResult => Boolean(page)))
 
   return pages
 }

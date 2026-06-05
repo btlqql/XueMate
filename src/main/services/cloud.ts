@@ -36,6 +36,10 @@ export function getCloudBaseUrl(): string | null {
   return configured.replace(/\/$/, '')
 }
 
+export function getCloudClientTimeoutMs(): number {
+  return parsePositiveIntEnv('XUEMATE_CLOUD_CLIENT_TIMEOUT_MS', 4500, 1200, 30000)
+}
+
 export async function searchCloudLearningResources(
   query: string,
   limit = 4
@@ -49,7 +53,8 @@ export async function searchCloudLearningResources(
       'Content-Type': 'application/json',
       'X-XueMate-Client': 'electron-main'
     },
-    body: JSON.stringify({ query, limit })
+    body: JSON.stringify({ query, limit }),
+    signal: AbortSignal.timeout(getCloudClientTimeoutMs())
   })
 
   if (!response.ok) {
@@ -78,9 +83,16 @@ export async function searchCloudLearningResources(
             scores: normalizeScores(source?.scores),
             level: String(source?.level || source?.scores?.level || 'C')
           }))
-          .filter((source) => /^https?:\/\//i.test(source.url))
+          .filter((source: CloudResourceSource) => /^https?:\/\//i.test(source.url))
       : []
   }
+}
+
+function parsePositiveIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name]
+  const parsed = raw === undefined || raw.trim() === '' ? fallback : Number(raw)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(min, Math.min(Math.floor(parsed), max))
 }
 
 function normalizeScores(scores: any): CloudResourceScores {

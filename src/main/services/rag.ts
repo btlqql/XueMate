@@ -39,6 +39,7 @@ const LEXICAL_ONLY_WEIGHTS = {
 // ── Embedding API ──
 
 export async function getEmbedding(text: string): Promise<number[]> {
+  assertEmbeddingConfigured()
   const response = await fetch(EMBEDDING_BASE_URL, {
     method: 'POST',
     headers: {
@@ -57,10 +58,17 @@ export async function getEmbedding(text: string): Promise<number[]> {
   }
 
   const data = await response.json()
-  return data.data[0].embedding
+  const embedding = data?.data?.[0]?.embedding
+  if (!isEmbeddingVector(embedding)) {
+    throw new Error('Embedding API 返回格式异常：没有可用的向量数据')
+  }
+  return embedding
 }
 
 async function getEmbeddings(texts: string[]): Promise<number[][]> {
+  assertEmbeddingConfigured()
+  if (texts.length === 0) return []
+
   const response = await fetch(EMBEDDING_BASE_URL, {
     method: 'POST',
     headers: {
@@ -79,7 +87,32 @@ async function getEmbeddings(texts: string[]): Promise<number[][]> {
   }
 
   const data = await response.json()
-  return data.data.sort((a: any, b: any) => a.index - b.index).map((d: any) => d.embedding)
+  const items = data?.data
+  if (!Array.isArray(items)) {
+    throw new Error('Embedding API 返回格式异常：data 不是数组')
+  }
+
+  const embeddings = items
+    .slice()
+    .sort((a: any, b: any) => Number(a?.index || 0) - Number(b?.index || 0))
+    .map((item: any) => item?.embedding)
+
+  if (embeddings.length !== texts.length || embeddings.some((item) => !isEmbeddingVector(item))) {
+    throw new Error(
+      `Embedding API 返回数量或格式异常：期望 ${texts.length} 个向量，实际 ${embeddings.length} 个`
+    )
+  }
+  return embeddings
+}
+
+function assertEmbeddingConfigured(): void {
+  if (!EMBEDDING_API_KEY || /^your_/i.test(EMBEDDING_API_KEY)) {
+    throw new Error('缺少 EMBEDDING_API_KEY，请先在 .env 中配置向量模型密钥后再导入资料')
+  }
+}
+
+function isEmbeddingVector(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length > 0 && value.every((item) => Number.isFinite(item))
 }
 
 // ── 文本分块 ──

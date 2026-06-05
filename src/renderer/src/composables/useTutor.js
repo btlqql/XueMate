@@ -1,4 +1,5 @@
 import { computed, ref, watch } from 'vue'
+import { parseLLMJson } from '../utils/llmJson'
 
 const sampleCode = `def bubble_sort(arr):
     n = len(arr)
@@ -158,7 +159,7 @@ export function useTutor() {
     try {
       const result = await window.llm.tutorCode(inputCode.value, inputType.value)
       if (result.success) {
-        results.value = JSON.parse(result.data)
+        results.value = parseLLMJson(result.data)
       } else {
         error.value = result.error || '请求失败'
       }
@@ -185,7 +186,7 @@ export function useTutor() {
           : practiceTopic.value
       const result = await window.llm.generateProblems(topicPrompt, 3)
       if (result.success) {
-        practiceProblems.value = JSON.parse(result.data).problems
+        practiceProblems.value = parseLLMJson(result.data).problems || []
       } else {
         error.value = result.error || '生成失败'
       }
@@ -215,7 +216,7 @@ export function useTutor() {
         resolvePracticeLanguage()
       )
       if (result.success) {
-        judgeResult.value = JSON.parse(result.data)
+        judgeResult.value = parseLLMJson(result.data)
       } else {
         error.value = result.error || '判题失败'
       }

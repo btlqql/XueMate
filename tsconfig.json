@@ -12,11 +12,12 @@
     "outDir": "./out",
     "rootDir": "./src",
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@main/*": ["src/main/*"],
       "@renderer/*": ["src/renderer/*"]
     }
   },
-  "include": ["src/main/**/*.ts", "src/preload/**/*.ts"],
+  "include": ["src/main/**/*.ts", "src/main/**/*.d.ts", "src/preload/**/*.ts", "src/preload/**/*.d.ts"],
   "exclude": ["node_modules", "out", "dist"]
 }

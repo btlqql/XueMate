@@ -133,16 +133,21 @@ Detailed design and methodology:
 
 ## XueMate Cloud Vendor Stack
 
-云端已内置开源网络微服务源码：
+云端采用轻量网络微服务栈，去掉了 Crawl4AI 重型浏览器镜像，避免演示现场首次拉取过慢：
 
-- `/Users/wangyue/wangyue/XueMate/cloud/services/crawler/crawl4ai`：网页抓取与正文抽取。
 - `/Users/wangyue/wangyue/XueMate/cloud/services/search/searxng`：搜索聚合源码。
-- `/Users/wangyue/wangyue/XueMate/cloud/gateway/server.mjs`：XueMate Cloud Gateway，负责任务编排、缓存、质量评分和指标。
+- `/Users/wangyue/wangyue/XueMate/cloud/gateway/server.mjs`：XueMate Cloud Gateway，负责任务编排、缓存、网页抽取、质量评分和指标。
 
-启动云端完整微服务：
+启动轻量云端微服务：
 
 ```bash
 npm run cloud:docker
+```
+
+服务器/高性能机器可以启动全量云端微服务（Crawl4AI 使用 basic-amd64 镜像）：
+
+```bash
+npm run cloud:docker:full
 ```
 
 只启动 Gateway 调试：

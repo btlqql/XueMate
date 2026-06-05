@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { parseLLMJson } from '../utils/llmJson'
 
 const courseName = ref('')
 const generating = ref(false)
@@ -12,18 +13,23 @@ const generateOutline = async () => {
   error.value = ''
   outline.value = null
 
-  const result = await window.llm.generateReview(courseName.value)
+  try {
+    const result = await window.llm.generateReview(courseName.value)
 
-  if (result.success) {
-    try {
-      outline.value = JSON.parse(result.data)
-    } catch {
-      error.value = '解析结果格式异常，请重试'
+    if (result.success) {
+      try {
+        outline.value = parseLLMJson(result.data)
+      } catch {
+        error.value = '解析结果格式异常，请重试'
+      }
+    } else {
+      error.value = result.error || '请求失败'
     }
-  } else {
-    error.value = result.error || '请求失败'
+  } catch (e) {
+    error.value = '调用失败: ' + (e.message || '未知错误')
+  } finally {
+    generating.value = false
   }
-  generating.value = false
 }
 </script>
 

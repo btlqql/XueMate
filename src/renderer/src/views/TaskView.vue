@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { parseLLMJson } from '../utils/llmJson'
 
 const inputText = ref('')
 const tasks = ref([])
@@ -47,7 +48,7 @@ const parseTask = async () => {
 
     if (result.success) {
       try {
-        const json = JSON.parse(result.data)
+        const json = parseLLMJson(result.data)
         const newTasks = json.tasks.map((t) => ({
           title: t.title,
           deadline: t.deadline || '未指定',

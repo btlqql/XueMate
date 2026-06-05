@@ -75,7 +75,7 @@ const MAX_RETRIES = 2
 async function planNextStep(ctx: AgentContext): Promise<PlanResult> {
   const history = ctx.steps
     .map((s) => {
-      let statusText = s.status
+      let statusText: string = s.status
       if (s.status === 'blocked') statusText = '被安全策略禁止'
       else if (s.status === 'skipped') statusText = '用户拒绝执行'
       else if (s.status === 'error') statusText = '执行失败'
