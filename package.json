@@ -19,6 +19,8 @@
     "rebuild:native": "electron-builder install-app-deps",
     "bench:rag": "node scripts/rag-benchmark.mjs",
     "bench:memory": "node scripts/memory-benchmark.mjs",
+    "mcp:build": "cargo build --release --manifest-path mcp-gateway-rs/Cargo.toml",
+    "bench:mcp": "node scripts/bench-mcp-layer.mjs",
     "cloud:dev": "node cloud/gateway/server.mjs",
     "cloud:docker": "cd cloud && docker compose up -d",
     "cloud:docker:ps": "cd cloud && docker compose ps",

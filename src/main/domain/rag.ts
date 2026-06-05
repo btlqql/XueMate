@@ -38,6 +38,7 @@ export interface RetrieveOptions {
   candidateK?: number
   minScore?: number
   useMmr?: boolean
+  noCache?: boolean
 }
 
 export interface RetrieveResult {

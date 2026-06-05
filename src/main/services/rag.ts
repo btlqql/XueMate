@@ -1,9 +1,12 @@
 import { randomUUID } from 'crypto'
 import * as ragDao from '../dao/ragDao'
-import type { ChunkRow } from '../dao/ragDao'
 import type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../domain/rag'
 import { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../domain/rag'
-import { blobToEmbedding, embeddingToBlob, rowToChunk, rowToCollection, rowToDocument } from '../mappers/ragMapper'
+import { rowToChunk, rowToCollection, rowToDocument } from '../mappers/ragMapper'
+import { clearBridgeCache } from './bridgeCache'
+import { getCachedQueryEmbedding } from './ragQueryCache'
+import { getVectorIndex, invalidateVectorIndex } from './ragVectorIndex'
+import { dotProduct, float32ToEmbeddingBlob, normalizeVector } from './vectorMath'
 
 export type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../domain/rag'
 export { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../domain/rag'
@@ -159,24 +162,6 @@ export function chunkText(text: string): { content: string; start: number; end: 
   return mergeSmallChunks(chunks)
 }
 
-// ── 余弦相似度 ──
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length === 0 || b.length === 0 || a.length !== b.length) return -Infinity
-
-  let dot = 0,
-    normA = 0,
-    normB = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    normA += a[i] * a[i]
-    normB += b[i] * b[i]
-  }
-
-  if (normA === 0 || normB === 0) return -Infinity
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
-}
-
 function normalizeDocumentText(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
@@ -288,7 +273,8 @@ function lexicalScore(queryTokens: string[], content: string): number {
   }
 
   const coverage = weightedHits / Math.max(maxWeight, 1)
-  const density = queryTokens.filter((token) => contentText.includes(token)).length / queryTokens.length
+  const density =
+    queryTokens.filter((token) => contentText.includes(token)).length / queryTokens.length
   return clamp01(coverage * 0.75 + density * 0.25)
 }
 
@@ -304,7 +290,9 @@ function structureScore(queryTokens: string[], chunk: Chunk): number {
     if (head.includes(token)) score += 0.06
   }
 
-  if (/【章节】|第.+[章节课]|目标|重点|难点|公式|步骤|例题|练习/.test(chunk.content.slice(0, 120))) {
+  if (
+    /【章节】|第.+[章节课]|目标|重点|难点|公式|步骤|例题|练习/.test(chunk.content.slice(0, 120))
+  ) {
     score += 0.18
   }
   if (chunk.startPos < 1200) score += 0.08
@@ -353,6 +341,15 @@ function normalizeCollectionId(collectionId?: string): string | undefined {
   return collectionId
 }
 
+function queryEmbeddingCacheKey(query: string): string {
+  return JSON.stringify([
+    'rag-query-embedding-v1',
+    EMBEDDING_BASE_URL,
+    EMBEDDING_MODEL,
+    query.trim()
+  ])
+}
+
 function assertCollection(collectionId: string): void {
   const collection = ragDao.findCollectionById(collectionId)
   if (!collection) {
@@ -390,6 +387,7 @@ export function createCollection(name: string, description = ''): Collection {
     created_at: now,
     updated_at: now
   }
+  clearBridgeCache('rag:createCollection')
   return rowToCollection(row)
 }
 
@@ -454,13 +452,15 @@ export async function importDocument(
       collection_id: collectionId,
       file_name: fileName,
       content: chunk.content,
-      embedding: embeddingToBlob(allEmbeddings[index]),
+      embedding: float32ToEmbeddingBlob(normalizeVector(allEmbeddings[index])),
       start_pos: chunk.start,
       end_pos: chunk.end,
       created_at: now
     }))
   )
 
+  invalidateVectorIndex(collectionId)
+  clearBridgeCache('rag:importDocument')
   console.log(
     `[RAG] 导入完成: ${fileName}, ${textChunks.length} 个 chunk, collection=${collectionId}`
   )
@@ -476,7 +476,7 @@ export async function retrieve(
     typeof options === 'number'
       ? Math.max(RETRIEVAL_POOL_SIZE, topK * 6)
       : options.candidateK || Math.max(RETRIEVAL_POOL_SIZE, topK * 6)
-  const minScore = typeof options === 'number' ? 0.18 : options.minScore ?? 0.18
+  const minScore = typeof options === 'number' ? 0.18 : (options.minScore ?? 0.18)
   const useMmr = typeof options === 'number' ? true : options.useMmr !== false
   const rawCollectionId = typeof options === 'number' ? undefined : options.collectionId
   if (rawCollectionId === RAG_OFF_ID) return []
@@ -489,7 +489,10 @@ export async function retrieve(
   let weights = HYBRID_WEIGHTS
 
   try {
-    queryEmbedding = await getEmbedding(query)
+    queryEmbedding =
+      typeof options !== 'number' && options.noCache
+        ? await getEmbedding(query)
+        : await getCachedQueryEmbedding(queryEmbeddingCacheKey(query), () => getEmbedding(query))
   } catch (error: any) {
     console.warn('[RAG] dense embedding 失败，降级到 bounded lexical 检索:', error.message)
     weights = LEXICAL_ONLY_WEIGHTS
@@ -549,7 +552,9 @@ export async function retrieve(
       const diversityPenalty =
         selected.length === 0
           ? 0
-          : Math.max(...selected.map((item) => chunkDiversitySimilarity(candidate.chunk, item.chunk)))
+          : Math.max(
+              ...selected.map((item) => chunkDiversitySimilarity(candidate.chunk, item.chunk))
+            )
       const mmrScore = MMR_LAMBDA * candidate.score - (1 - MMR_LAMBDA) * diversityPenalty
       if (mmrScore > bestMmr) {
         bestMmr = mmrScore
@@ -577,16 +582,14 @@ function scoreChunkEmbeddings(
   queryEmbedding: number[],
   collectionId: string | undefined
 ): { denseByChunkId: Map<string, number>; rankedIds: string[] } {
-  const rows = collectionId
-    ? ragDao.findChunkEmbeddingsByCollection(collectionId)
-    : ragDao.findChunkEmbeddings()
+  const queryVector = normalizeVector(queryEmbedding)
+  const index = getVectorIndex(collectionId)
 
-  const scored = rows
-    .filter((row) => row.embedding)
-    .map((row) => {
-      const denseRaw = cosineSimilarity(queryEmbedding, blobToEmbedding(row.embedding!))
+  const scored = index.entries
+    .map((entry) => {
+      const denseRaw = dotProduct(queryVector, entry.vector)
       return {
-        id: row.id,
+        id: entry.chunkId,
         denseScore: clamp01((denseRaw + 1) / 2)
       }
     })
@@ -658,7 +661,11 @@ export function deleteDocument(docId: string): boolean {
   ragDao.deleteChunksByDocumentId(docId)
   if (doc?.collection_id) {
     ragDao.touchCollection(doc.collection_id, Date.now())
+    invalidateVectorIndex(doc.collection_id)
+  } else {
+    invalidateVectorIndex()
   }
+  clearBridgeCache('rag:deleteDocument')
   return true
 }
 
