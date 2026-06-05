@@ -21,7 +21,7 @@ const {
   friendlyError,
   error,
   answer,
-  browserBoxRef,
+  setBrowserBoxElement,
   domElementCount,
   domCandidates,
   loadControlSample,
@@ -92,6 +92,7 @@ const {
       :control-samples="controlSamples"
       :dom-candidates="domCandidates"
       :dom-element-count="domElementCount"
+      :set-browser-box-element="setBrowserBoxElement"
       @start="startAssistant"
       @stop="stopAssistant"
       @clear="clearControl"

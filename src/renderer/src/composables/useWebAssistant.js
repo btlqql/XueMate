@@ -142,6 +142,16 @@ export function useWebAssistant(activeMode) {
     }
   }
 
+  function setBrowserBoxElement(el) {
+    browserBoxRef.value = el
+    if (!el) {
+      teardownBrowserBoxObserver()
+      return
+    }
+    setupBrowserBoxObserver()
+    scheduleLiveBrowserBoundsSync()
+  }
+
   async function syncLiveBrowserBounds() {
     if (activeMode.value !== 'control' || !shouldShowLiveBrowser()) {
       await window.webAssistant.setLiveBounds(null)
@@ -242,7 +252,7 @@ export function useWebAssistant(activeMode) {
     friendlyError,
     error,
     answer,
-    browserBoxRef,
+    setBrowserBoxElement,
     domElementCount,
     domCandidates,
     loadControlSample,
