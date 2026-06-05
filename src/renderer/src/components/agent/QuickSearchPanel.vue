@@ -46,8 +46,27 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
     </section>
 
     <section class="card result-card" v-if="searchResult">
-      <h2 class="section-title">查到的内容</h2>
+      <div class="result-head">
+        <h2 class="section-title">查到的内容</h2>
+        <div class="mode-badge" :class="searchResult.mode === 'cloud' ? 'cloud' : 'local'">
+          {{ searchResult.mode === 'cloud' ? '云端网络资源分析' : '本地搜索回退' }}
+        </div>
+      </div>
+      <div class="cloud-meta" v-if="searchResult.mode === 'cloud'">
+        <span>Task: {{ searchResult.taskId || 'cloud' }}</span>
+        <span v-if="searchResult.elapsedMs">{{ searchResult.elapsedMs }}ms</span>
+        <span v-if="searchResult.cacheHit">缓存命中</span>
+      </div>
       <div class="summary-box">{{ searchResult.summary }}</div>
+
+      <div class="stage-list" v-if="searchResult.stages?.length">
+        <div v-for="stage in searchResult.stages.slice(0, 5)" :key="stage.at + stage.name" class="stage-item">
+          <span class="stage-dot" :class="stage.status"></span>
+          <strong>{{ stage.name }}</strong>
+          <small>{{ stage.detail }}</small>
+        </div>
+      </div>
+
       <h3 class="source-title">参考网页</h3>
       <div class="source-list">
         <a
@@ -57,8 +76,13 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
           :href="source.url"
           target="_blank"
         >
-          <strong>{{ source.title }}</strong>
-          <small>{{ source.url }}</small>
+          <div class="source-main">
+            <strong>{{ source.title }}</strong>
+            <small>{{ source.url }}</small>
+          </div>
+          <div class="score-pill" v-if="source.scores">
+            {{ source.scores.level || source.level }} · {{ source.scores.overall }}
+          </div>
         </a>
       </div>
     </section>
@@ -75,8 +99,8 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
           <p>把网页内容整理成适合学生读的总结。</p>
         </div>
         <div class="feature">
-          <strong>不用点网页</strong>
-          <p>它只抓网页文字，不会乱操作。</p>
+          <strong>云端筛选</strong>
+          <p>启动云端后会按适龄性、可信度、可读性给网页评分。</p>
         </div>
         <div class="feature">
           <strong>更快</strong>

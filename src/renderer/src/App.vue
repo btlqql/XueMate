@@ -5,7 +5,7 @@ import ToolView from './views/ToolView.vue'
 import AgentView from './views/AgentView.vue'
 import KnowledgeView from './views/KnowledgeView.vue'
 
-const currentView = ref('chat')
+const currentView = ref('knowledge')
 
 const viewMap = {
   chat: markRaw(ChatView),
@@ -117,9 +117,7 @@ const navItems = [
     </aside>
 
     <main class="main-content" :class="{ 'chat-mode': currentView === 'chat' }">
-      <keep-alive>
-        <component :is="viewMap[currentView]" @navigate="currentView = $event" />
-      </keep-alive>
+      <component :is="viewMap[currentView]" @navigate="currentView = $event" />
     </main>
   </div>
 </template>

@@ -71,6 +71,14 @@ export function useKnowledgeGraphRenderer(props) {
     }))
   })
 
+  const searchPlaceholder = computed(() => {
+    const samples = (props.graphData?.nodes || [])
+      .filter((node) => node.type === 'concept' && node.label)
+      .slice(0, 2)
+      .map((node) => node.label)
+    return samples.length ? `搜索：${samples.join(' / ')} / 资料名` : '搜索知识点或资料名'
+  })
+
   watch(
     () => props.graphData,
     async () => {
@@ -446,7 +454,9 @@ export function useKnowledgeGraphRenderer(props) {
     hasGraph,
     graphStatusText,
     legendItems,
+    searchPlaceholder,
     searchNode,
+    selectNode,
     fitGraph,
     formatPercent,
     formatDate

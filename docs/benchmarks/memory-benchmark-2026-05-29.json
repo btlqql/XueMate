@@ -1,0 +1,53 @@
+{
+  "generatedAt": "2026-05-29T00:00:00.000Z",
+  "dataset": {
+    "observations": 18,
+    "expectedActionableWeak": 4
+  },
+  "baseline": {
+    "name": "flat_append_memory",
+    "promptItems": 18,
+    "promptChars": 531,
+    "duplicateFacts": 5,
+    "staleFacts": 2,
+    "actionableWeakRecall": 1,
+    "reviewQueueSize": 0,
+    "reviewQueueCoverage": 0
+  },
+  "enhanced": {
+    "name": "atom_confidence_decay_review_queue",
+    "promptItems": 11,
+    "promptChars": 333,
+    "duplicateFacts": 0,
+    "staleFacts": 0,
+    "actionableWeakRecall": 1,
+    "reviewQueueSize": 4,
+    "reviewQueueCoverage": 1,
+    "topReviewItems": [
+      {
+        "key": "异分母通分",
+        "priority": 90
+      },
+      {
+        "key": "分母相加",
+        "priority": 79
+      },
+      {
+        "key": "约分化简",
+        "priority": 77
+      },
+      {
+        "key": "英语自然拼读",
+        "priority": 72
+      }
+    ]
+  },
+  "improvement": {
+    "promptCompressionPct": 37.28813559322034,
+    "itemCompressionPct": 38.888888888888886,
+    "duplicateReductionPct": 100,
+    "staleSuppressionPct": 100,
+    "reviewQueueCoveragePct": 100,
+    "actionableRecallLiftPct": 0
+  }
+}

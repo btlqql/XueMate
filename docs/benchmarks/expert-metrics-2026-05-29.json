@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-05-29T08:37:05.623Z",
+  "project": "XueMate",
+  "rag": {
+    "method": "Hybrid RAG: dense + lexical + structure + MMR",
+    "benchmarkFile": "docs/benchmarks/rag-benchmark-2026-05-29.json",
+    "queryCount": 10,
+    "chunkCount": 17,
+    "baseline": {
+      "recallAtK": 0.9333333333333332,
+      "precisionAtK": 0.4666666666666666,
+      "ndcgAtK": 0.8939650057890589,
+      "contextWaste": 0.5333333333333333,
+      "mrr": 0.95
+    },
+    "enhanced": {
+      "recallAtK": 0.9666666666666666,
+      "precisionAtK": 0.4999999999999999,
+      "ndcgAtK": 0.9703918089034135,
+      "contextWaste": 0.5,
+      "mrr": 1
+    },
+    "improvement": {
+      "recallLiftPct": 3.571428571428571,
+      "precisionLiftPct": 7.14285714285713,
+      "ndcgLiftPct": 8.549194053395457,
+      "duplicateReductionPct": -11.111111111111107,
+      "contextWasteReductionPct": 6.249999999999998,
+      "contextCompressionVsFullCorpusPct": 82.13720316622691
+    }
+  },
+  "memory": {
+    "method": "Memory Atom: confidence + importance + evidence + decay + review queue",
+    "benchmarkFile": "docs/benchmarks/memory-benchmark-2026-05-29.json",
+    "observations": 18,
+    "baseline": {
+      "name": "flat_append_memory",
+      "promptItems": 18,
+      "promptChars": 531,
+      "duplicateFacts": 5,
+      "staleFacts": 2,
+      "actionableWeakRecall": 1,
+      "reviewQueueSize": 0,
+      "reviewQueueCoverage": 0
+    },
+    "enhanced": {
+      "name": "atom_confidence_decay_review_queue",
+      "promptItems": 11,
+      "promptChars": 333,
+      "duplicateFacts": 0,
+      "staleFacts": 0,
+      "actionableWeakRecall": 1,
+      "reviewQueueSize": 4,
+      "reviewQueueCoverage": 1,
+      "topReviewItems": [
+        {
+          "key": "异分母通分",
+          "priority": 90
+        },
+        {
+          "key": "分母相加",
+          "priority": 79
+        },
+        {
+          "key": "约分化简",
+          "priority": 77
+        },
+        {
+          "key": "英语自然拼读",
+          "priority": 72
+        }
+      ]
+    },
+    "improvement": {
+      "promptCompressionPct": 37.28813559322034,
+      "itemCompressionPct": 38.888888888888886,
+      "duplicateReductionPct": 100,
+      "staleSuppressionPct": 100,
+      "reviewQueueCoveragePct": 100,
+      "actionableRecallLiftPct": 0
+    }
+  }
+}

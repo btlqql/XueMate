@@ -16,6 +16,8 @@ const {
   selectedProblem,
   practiceCode,
   practiceLang,
+  practiceLanguageOptions,
+  detectedPracticeLanguage,
   judging,
   judgeResult,
   generatingProblems,
@@ -222,12 +224,24 @@ const {
           </div>
           <div class="button-group">
             <button class="btn btn-outline btn-sm" @click="loadPracticeSample">示例</button>
-            <select v-model="practiceLang" class="lang-select">
-              <option>Python</option>
-              <option>Java</option>
-              <option>C</option>
-              <option>JavaScript</option>
-            </select>
+            <div class="lang-field">
+              <input
+                v-model="practiceLang"
+                class="lang-select"
+                list="practice-language-options"
+                placeholder="自动识别语言"
+              />
+              <datalist id="practice-language-options">
+                <option
+                  v-for="item in practiceLanguageOptions"
+                  :key="item.value"
+                  :value="item.value"
+                />
+              </datalist>
+              <span v-if="detectedPracticeLanguage" class="lang-hint">
+                自动识别：{{ detectedPracticeLanguage }}
+              </span>
+            </div>
           </div>
           <div class="error-msg" v-if="error">{{ error }}</div>
         </div>
@@ -407,6 +421,13 @@ const {
   flex: 1;
 }
 
+.lang-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .lang-select {
   padding: 6px 14px;
   border: 2px solid #e5e5e5;
@@ -415,7 +436,16 @@ const {
   font-weight: 700;
   font-size: 14px;
   background: white;
-  cursor: pointer;
+  min-width: 150px;
+}
+
+.lang-hint {
+  color: var(--xm-green-dark);
+  background: #e6f7d9;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 /* 题目列表 */

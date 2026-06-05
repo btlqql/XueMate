@@ -1,10 +1,24 @@
 import { checkSearchSafety, summarizeResults } from './agent'
+import { searchCloudLearningResources, getCloudBaseUrl, type CloudResourceScores } from './cloud'
 import { searchAndFetch } from './web'
+
+export interface QuickSearchSource {
+  title: string
+  url: string
+  text: string
+  scores?: CloudResourceScores
+  level?: string
+}
 
 export interface QuickSearchResult {
   query: string
   summary: string
-  sources: { title: string; url: string; text: string }[]
+  mode: 'cloud' | 'local'
+  taskId?: string
+  elapsedMs?: number
+  cacheHit?: boolean
+  stages?: { name: string; status: string; detail: string; at: string }[]
+  sources: QuickSearchSource[]
 }
 
 export async function quickSearch(query: string): Promise<QuickSearchResult> {
@@ -16,6 +30,33 @@ export async function quickSearch(query: string): Promise<QuickSearchResult> {
     throw new Error(unsafe)
   }
 
+  const cloudBaseUrl = getCloudBaseUrl()
+  if (cloudBaseUrl) {
+    try {
+      const cloudResult = await searchCloudLearningResources(normalized, 4)
+      if (cloudResult) {
+        return {
+          query: cloudResult.query,
+          summary: cloudResult.summary,
+          mode: 'cloud',
+          taskId: cloudResult.taskId,
+          elapsedMs: cloudResult.elapsedMs,
+          cacheHit: cloudResult.cacheHit,
+          stages: cloudResult.stages,
+          sources: cloudResult.sources.map((source) => ({
+            title: source.title,
+            url: source.url,
+            text: source.text.slice(0, 700),
+            scores: source.scores,
+            level: source.level
+          }))
+        }
+      }
+    } catch (error: any) {
+      console.warn('[QuickSearch] 云端不可用，回退到本地搜索:', error.message || error)
+    }
+  }
+
   const pages = await searchAndFetch(normalized)
   const sources = pages.slice(0, 4).map((page) => ({
     title: page.title || '网页',
@@ -25,5 +66,5 @@ export async function quickSearch(query: string): Promise<QuickSearchResult> {
 
   const rawText = sources.map((page) => `【${page.title}】${page.url}\n${page.text}`).join('\n\n')
   const summary = await summarizeResults(normalized, rawText)
-  return { query: normalized, summary, sources }
+  return { query: normalized, summary, mode: 'local', sources }
 }

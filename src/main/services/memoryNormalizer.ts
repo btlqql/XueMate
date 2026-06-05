@@ -24,6 +24,7 @@ export function normalizeMemory(raw: Partial<UserMemory> | any): UserMemory {
   }
 
   memory.preferences.subjects = uniqueStrings(memory.preferences.subjects || []).slice(0, 12)
+  memory.preferences.language = normalizeLanguagePreference(memory.preferences.language)
   memory.profile.learningGoals = uniqueStrings(memory.profile.learningGoals || []).slice(0, 12)
   memory.history.topics = uniqueStrings(memory.history.topics || []).slice(-40)
   memory.history.weakPoints = uniqueStrings(memory.history.weakPoints || []).slice(-40)
@@ -79,4 +80,12 @@ export function normalizeMemory(raw: Partial<UserMemory> | any): UserMemory {
 
   refreshMemoryDerivedState(memory)
   return memory
+}
+
+function normalizeLanguagePreference(value: string): string {
+  const label = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 24)
+  if (!label) return DEFAULT_MEMORY.preferences.language
+  if (/^(zh|cn|中文|汉语|普通话)$/i.test(label)) return 'zh'
+  if (/^(en|eng|english|英文|英语)$/i.test(label)) return 'en'
+  return label
 }

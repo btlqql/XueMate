@@ -61,7 +61,7 @@ export interface UserMemory {
   preferences: {
     subjects: string[]
     difficulty: 'easy' | 'medium' | 'hard'
-    language: 'zh' | 'en'
+    language: string
   }
   history: {
     topics: string[]

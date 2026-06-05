@@ -26,140 +26,137 @@ interface ConceptRule {
   id: string
   label: string
   subject: string
-  patterns: RegExp[]
   aliases?: string[]
+  source: 'content' | 'title' | 'memory' | 'fallback'
+  confidence: number
+}
+
+interface ConceptExtractOptions {
+  fileName?: string
+  collectionName?: string
+  maxTerms?: number
 }
 
 const MAX_DOC_NODES = 32
 const MAX_CHUNK_SCAN = 420
 const MAX_CHUNK_NODES = 42
-const MAX_CONCEPT_NODES = 56
+const MAX_CONCEPT_NODES = 42
 const MAX_MEMORY_NODES = 28
 const MAX_REVIEW_NODES = 14
 
-const conceptRules: ConceptRule[] = [
-  {
-    id: 'concept:bubble-sort',
-    label: '冒泡排序',
-    subject: '编程',
-    patterns: [/冒泡排序|bubble\s*sort/i],
-    aliases: ['bubble sort', '排序算法']
-  },
-  {
-    id: 'concept:nested-loop',
-    label: '循环嵌套',
-    subject: '编程',
-    patterns: [/循环嵌套|嵌套循环|两层循环|双重循环|nested\s*loop/i]
-  },
-  {
-    id: 'concept:list-index',
-    label: '列表索引',
-    subject: '编程',
-    patterns: [/列表索引|数组索引|下标|越界|index|arr\[[^\]]+\]|j\s*\+\s*1/i]
-  },
-  {
-    id: 'concept:variable',
-    label: '变量',
-    subject: '编程',
-    patterns: [/变量|赋值|variable|let|const|var/i]
-  },
-  {
-    id: 'concept:condition',
-    label: '条件判断',
-    subject: '编程',
-    patterns: [/条件判断|如果|if\s|else|比较大小/i]
-  },
-  {
-    id: 'concept:function',
-    label: '函数',
-    subject: '编程',
-    patterns: [/函数|def\s+|function\s+|参数|返回值/i]
-  },
-  {
-    id: 'concept:python',
-    label: 'Python',
-    subject: '编程',
-    patterns: [/python|py\b|range\(|len\(|print\(/i]
-  },
-  {
-    id: 'concept:algorithm',
-    label: '算法步骤',
-    subject: '编程',
-    patterns: [/算法|步骤|流程|伪代码|复杂度|algorithm/i]
-  },
-  {
-    id: 'concept:fraction',
-    label: '分数',
-    subject: '数学',
-    patterns: [/分数|分子|分母|通分|约分/]
-  },
-  {
-    id: 'concept:equation',
-    label: '方程',
-    subject: '数学',
-    patterns: [/方程|未知数|解方程|等式/]
-  },
-  {
-    id: 'concept:geometry',
-    label: '几何图形',
-    subject: '数学',
-    patterns: [/几何|面积|周长|三角形|长方形|正方形|圆形|角度/]
-  },
-  {
-    id: 'concept:decimal',
-    label: '小数',
-    subject: '数学',
-    patterns: [/小数|百分数|百分比/]
-  },
-  {
-    id: 'concept:word-problem',
-    label: '应用题',
-    subject: '数学',
-    patterns: [/应用题|数量关系|单位换算|路程|速度|时间/]
-  },
-  {
-    id: 'concept:reading',
-    label: '阅读理解',
-    subject: '语文',
-    patterns: [/阅读理解|中心思想|段落大意|文章主旨|修辞/]
-  },
-  {
-    id: 'concept:writing',
-    label: '作文表达',
-    subject: '语文',
-    patterns: [/作文|写作|开头|结尾|描写|叙事/]
-  },
-  {
-    id: 'concept:vocabulary',
-    label: '单词记忆',
-    subject: '英语',
-    patterns: [/单词|词汇|vocabulary|拼读|音标|phonics/i]
-  },
-  {
-    id: 'concept:grammar',
-    label: '英语语法',
-    subject: '英语',
-    patterns: [/语法|grammar|时态|一般现在时|过去式|句型/i]
-  },
-  {
-    id: 'concept:experiment',
-    label: '科学实验',
-    subject: '科学',
-    patterns: [/实验|观察|假设|结论|变量控制|记录表/]
-  },
-  {
-    id: 'concept:plant',
-    label: '植物生长',
-    subject: '科学',
-    patterns: [/植物|种子|发芽|光合作用|根茎叶/]
-  },
-  {
-    id: 'concept:force',
-    label: '力与运动',
-    subject: '科学',
-    patterns: [/力|运动|摩擦|磁铁|重力|速度/]
-  }
-]
+const englishStopWords = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  'this',
+  'that',
+  'into',
+  'your',
+  'their',
+  'about',
+  'of',
+  'using',
+  'use',
+  'can',
+  'should',
+  'will',
+  'todo',
+  'note',
+  'notes',
+  'version',
+  'final',
+  'demo',
+  'page',
+  'file',
+  'data',
+  'text',
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'xuemate'
+])
+
+const chineseStopWords = new Set([
+  '我们',
+  '你们',
+  '他们',
+  '这个',
+  '那个',
+  '这些',
+  '那些',
+  '可以',
+  '需要',
+  '进行',
+  '通过',
+  '如果',
+  '然后',
+  '因为',
+  '所以',
+  '以及',
+  '包括',
+  '一个',
+  '一些',
+  '内容',
+  '资料',
+  '文档',
+  '文件',
+  '学生',
+  '老师',
+  '学习',
+  '课程',
+  '课堂',
+  '作业',
+  '问题',
+  '方法',
+  '步骤',
+  '说明',
+  '要求',
+  '系统',
+  '平台',
+  '功能',
+  '支持',
+  '展示',
+  '核心',
+  '核心展示',
+  '重制版',
+  '视觉',
+  '增强版',
+  '视觉增强版',
+  '目录',
+  '时候',
+  '里面',
+  '这里',
+  '那里',
+  '原来',
+  '现在',
+  '好处',
+  '启动',
+  '定位',
+  '界面',
+  '页面',
+  '入口',
+  '模块',
+  '逻辑',
+  '状态',
+  '结果',
+  '输入',
+  '输出',
+  '刷新',
+  '打开',
+  '关闭',
+  '点击',
+  '查看',
+  '生成',
+  '整理',
+  '关联',
+  '自动',
+  '默认',
+  '当前',
+  '全部'
+])
 
 function normalizeCollectionId(collectionId?: string): string | null {
   if (!collectionId || collectionId === ALL_COLLECTIONS_ID) return null
@@ -220,52 +217,201 @@ function getChunksForGraph(collectionId?: string): LearningGraphChunkRow[] {
     : learningGraphDao.findChunks(MAX_CHUNK_SCAN)
 }
 
-function matchConcepts(text: string): ConceptRule[] {
-  const haystack = `${text || ''}`.slice(0, 6000)
-  const matched: ConceptRule[] = []
-  for (const rule of conceptRules) {
-    if (rule.patterns.some((pattern) => pattern.test(haystack))) {
-      matched.push(rule)
+function normalizeConceptLabel(value: string): string {
+  return safeText(value.replace(/[_-]+/g, ' '), 36)
+    .replace(/^[\s:：,，.。/|]+|[\s:：,，.。/|]+$/g, '')
+    .trim()
+}
+
+function conceptKey(label: string): string {
+  return normalizeConceptLabel(label).toLowerCase().replace(/\s+/g, '-')
+}
+
+function isGoodEnglishTerm(term: string): boolean {
+  const normalized = term.toLowerCase()
+  if (englishStopWords.has(normalized)) return false
+  if (/^\d+$/.test(normalized)) return false
+  if (normalized.length < 2 || normalized.length > 32) return false
+  if (/^[a-z]{2,3}$/.test(normalized) && term !== term.toUpperCase()) return false
+  return /[a-z]/i.test(normalized)
+}
+
+function isGoodChineseTerm(term: string): boolean {
+  const label = normalizeConceptLabel(term)
+  if (label.length < 2 || label.length > 12) return false
+  if (chineseStopWords.has(label)) return false
+  if ([...chineseStopWords].some((stop) => label === stop || label.startsWith(stop + '的'))) return false
+  if (/(目录|展示|视觉|增强版|重制版)/.test(label)) return false
+  if (/^(原|现|好|启|定|页|模|状|结|输|刷|打|关|点|查|生|整|关|自|默|当|全)/.test(label) && label.length <= 3) return false
+  return /[\u4e00-\u9fff]/.test(label)
+}
+
+function addCandidate(
+  candidates: Map<string, { label: string; score: number; source: ConceptRule['source'] }>,
+  rawLabel: string,
+  score: number,
+  source: ConceptRule['source']
+): void {
+  const label = normalizeConceptLabel(rawLabel)
+  if (!label) return
+  const hasChinese = /[\u4e00-\u9fff]/.test(label)
+  const valid = hasChinese ? isGoodChineseTerm(label) : isGoodEnglishTerm(label)
+  if (!valid) return
+
+  const key = conceptKey(label)
+  const existing = candidates.get(key)
+  if (existing) {
+    existing.score += score
+    if (source === 'title') existing.source = 'title'
+    return
+  }
+  candidates.set(key, { label, score, source })
+}
+
+function addTitleTerms(
+  candidates: Map<string, { label: string; score: number; source: ConceptRule['source'] }>,
+  text: string,
+  score = 2.6
+): void {
+  const normalized = text
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/[()（）\[\]【】]/g, ' ')
+  for (const part of normalized.split(/[\s/|,，:：]+/)) {
+    addCandidate(candidates, part, score, 'title')
+  }
+  const cjk = normalized.match(/[\u4e00-\u9fff]{2,12}/g) || []
+  for (const term of cjk) addCandidate(candidates, term, score + 0.4, 'title')
+}
+
+function addTechnicalTerms(
+  candidates: Map<string, { label: string; score: number; source: ConceptRule['source'] }>,
+  text: string
+): void {
+  const matches = text.match(/[A-Za-z][A-Za-z0-9_+#.\-]{1,31}/g) || []
+  for (const raw of matches) {
+    const parts = raw.includes('_') ? raw.split('_') : [raw]
+    for (const part of parts) {
+      const label = part.length <= 4 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1)
+      addCandidate(candidates, label, /[A-Z]{2,}|\+|#|\d/.test(part) ? 2.2 : 1.3, 'content')
     }
   }
-  return matched
 }
 
-function dynamicConceptFromFile(fileName: string): ConceptRule {
-  const label = safeText(stripExt(fileName), 18) || '课程资料'
-  return {
-    id: nodeId('concept', label),
-    label,
-    subject: inferSubject(label),
-    patterns: []
+function addHeadingTerms(
+  candidates: Map<string, { label: string; score: number; source: ConceptRule['source'] }>,
+  text: string
+): void {
+  const lines = text.split(/\n+/).slice(0, 80)
+  for (const line of lines) {
+    const clean = line.replace(/^#{1,6}\s*/, '').trim()
+    if (!clean || clean.length > 80) continue
+    if (/^[-*\d.\s]+$/.test(clean)) continue
+
+    const titleLike = /^#{1,6}\s*/.test(line) || /[:：]$/.test(clean) || clean.length <= 24
+    if (!titleLike) continue
+
+    for (const part of clean.split(/[，,、/|:：()（）\[\]【】]+/)) {
+      addCandidate(candidates, part, 2.0, 'title')
+    }
   }
 }
 
-function inferSubject(text: string): string {
-  if (/数学|分数|方程|几何|小数|计算|公式|面积|周长/.test(text)) return '数学'
-  if (/英语|单词|语法|拼读|作文|阅读|grammar|vocabulary|phonics/i.test(text)) return '英语'
-  if (/科学|实验|植物|磁铁|过滤|物理|化学|运动|力/.test(text)) return '科学'
-  if (/语文|作文|阅读|古诗|拼音|修辞/.test(text)) return '语文'
-  if (/python|代码|编程|算法|列表|循环|排序|index|function|variable/i.test(text)) return '编程'
-  return '综合'
+function addChineseNgrams(
+  candidates: Map<string, { label: string; score: number; source: ConceptRule['source'] }>,
+  text: string
+): void {
+  const compact = text.replace(/\s+/g, '')
+  const counts = new Map<string, number>()
+  const sequences = compact.match(/[\u4e00-\u9fff]{2,40}/g) || []
+  for (const seq of sequences) {
+    for (let n = 2; n <= 6; n++) {
+      for (let i = 0; i <= seq.length - n; i++) {
+        const gram = seq.slice(i, i + n)
+        if (!isGoodChineseTerm(gram)) continue
+        counts.set(gram, (counts.get(gram) || 0) + 1)
+      }
+    }
+  }
+
+  for (const [term, count] of [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 18)) {
+    if (count < 2 && term.length <= 3) continue
+    addCandidate(candidates, term, Math.min(3.2, 0.7 + count * 0.45 + term.length * 0.08), 'content')
+  }
+}
+
+function subjectFromContext(options: ConceptExtractOptions, label: string): string {
+  const collection = normalizeConceptLabel(options.collectionName || '')
+  if (collection && !/^默认资料库|全部资料|当前资料夹$/.test(collection)) return collection
+
+  const title = normalizeConceptLabel(stripExt(options.fileName || ''))
+  const titleParts = title.split(/[\s_\-/|]+/).filter(Boolean)
+  const technical = titleParts.find((part) => /[A-Za-z][A-Za-z0-9+#.\-]*/.test(part))
+  if (technical) return normalizeConceptLabel(technical).slice(0, 18)
+
+  if (/[A-Za-z]/.test(label)) return '技术词'
+  return '自动抽取'
+}
+
+function extractConcepts(text: string, options: ConceptExtractOptions = {}): ConceptRule[] {
+  const candidates = new Map<string, { label: string; score: number; source: ConceptRule['source'] }>()
+  const fullText = `${options.fileName || ''}\n${text || ''}`.slice(0, 12000)
+
+  if (options.fileName) addTitleTerms(candidates, stripExt(options.fileName), 0.75)
+  addHeadingTerms(candidates, fullText)
+  addTechnicalTerms(candidates, fullText)
+  addChineseNgrams(candidates, fullText)
+
+  return [...candidates.values()]
+    .filter((item) => item.score >= 1.35 || /[A-Z]{2,}|\+|#|\d/.test(item.label))
+    .sort((a, b) => b.score - a.score || a.label.length - b.label.length)
+    .slice(0, options.maxTerms || 6)
+    .map((item) => ({
+      id: nodeId('concept', conceptKey(item.label)),
+      label: item.label,
+      subject: subjectFromContext(options, item.label),
+      aliases: [],
+      source: item.source,
+      confidence: clamp(item.score / 6, 0.22, 0.92)
+    }))
+}
+
+function dynamicConceptFromFile(fileName: string, collectionName?: string): ConceptRule {
+  const extracted = extractConcepts(fileName, { fileName, collectionName, maxTerms: 1 })
+  if (extracted.length > 0) return { ...extracted[0], source: 'fallback' }
+
+  const label = safeText(stripExt(fileName), 18) || '课程资料'
+  return {
+    id: nodeId('concept', conceptKey(label)),
+    label,
+    subject: subjectFromContext({ fileName, collectionName }, label),
+    aliases: [],
+    source: 'fallback',
+    confidence: 0.28
+  }
 }
 
 function findBestConceptForMemory(atom: MemoryAtom, conceptById: Map<string, ConceptRule>): ConceptRule {
   const text = `${atom.key} ${atom.value} ${(atom.evidence || []).join(' ')}`
+  const normalizedText = text.toLowerCase()
   for (const concept of conceptById.values()) {
-    if (text.includes(concept.label)) return concept
-    if ((concept.aliases || []).some((alias) => text.toLowerCase().includes(alias.toLowerCase()))) {
+    if (normalizedText.includes(concept.label.toLowerCase())) return concept
+    if ((concept.aliases || []).some((alias) => normalizedText.includes(alias.toLowerCase()))) {
       return concept
     }
-    if (matchConcepts(text).some((item) => item.id === concept.id)) return concept
   }
+
+  const extracted = extractConcepts(text, { maxTerms: 1 })
+  if (extracted.length > 0) return { ...extracted[0], source: 'memory' }
 
   const label = safeText(atom.value || atom.key, 16)
   return {
-    id: nodeId('concept', label),
+    id: nodeId('concept', conceptKey(label)),
     label,
-    subject: inferSubject(label),
-    patterns: []
+    subject: subjectFromContext({}, label),
+    aliases: [],
+    source: 'memory',
+    confidence: 0.35
   }
 }
 
@@ -367,17 +513,22 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
   }
 
   for (const chunk of chunks) {
-    let concepts = matchConcepts(`${chunk.file_name}\n${chunk.content}`)
+    const doc = docsById.get(chunk.document_id)
+    let concepts = extractConcepts(chunk.content, {
+      fileName: chunk.file_name,
+      collectionName: doc?.collection_name,
+      maxTerms: 6
+    })
     if (concepts.length === 0) {
-      concepts = [dynamicConceptFromFile(chunk.file_name)]
+      concepts = [dynamicConceptFromFile(chunk.file_name, doc?.collection_name)]
     }
     chunkConcepts.set(chunk.id, concepts)
 
     for (const concept of concepts) {
       conceptById.set(concept.id, concept)
-      conceptScore.set(concept.id, (conceptScore.get(concept.id) || 0) + 1)
+      conceptScore.set(concept.id, (conceptScore.get(concept.id) || 0) + concept.confidence)
       const docMap = docConceptWeight.get(chunk.document_id) || new Map<string, number>()
-      docMap.set(concept.id, (docMap.get(concept.id) || 0) + 1)
+      docMap.set(concept.id, (docMap.get(concept.id) || 0) + concept.confidence)
       docConceptWeight.set(chunk.document_id, docMap)
     }
   }
@@ -400,8 +551,11 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
       score: clamp(score / 18, 0.25, 1),
       meta: {
         subject: concept.subject,
-        mentions: score,
-        aliases: concept.aliases || []
+        mentions: Number(score.toFixed(2)),
+        aliases: concept.aliases || [],
+        source: concept.source,
+        confidence: concept.confidence,
+        dynamic: true
       }
     })
   }
@@ -465,7 +619,7 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
         type: 'concept',
         size: 9,
         score: 0.35,
-        meta: { subject: concept.subject, mentions: 0, source: 'memory' }
+        meta: { subject: concept.subject, mentions: 0, source: concept.source, confidence: concept.confidence, dynamic: true }
       })
     }
 
@@ -522,7 +676,7 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
         type: 'concept',
         size: 9,
         score: 0.35,
-        meta: { subject: concept.subject, source: 'review' }
+        meta: { subject: concept.subject, source: concept.source, confidence: concept.confidence, dynamic: true }
       })
     }
     const id = nodeId('review', review.key)
