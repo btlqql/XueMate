@@ -275,7 +275,7 @@ async function locateDocument(source) {
 }
 
 .collection-desc {
-  color: #888;
+  color: var(--xm-text-muted);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -288,8 +288,8 @@ async function locateDocument(source) {
 
 .collection-input {
   flex: 1;
-  border: 2px solid #e5e5e5;
-  border-radius: 10px;
+  border: 2px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   padding: 10px 12px;
   font-size: 14px;
   outline: none;
@@ -313,9 +313,9 @@ async function locateDocument(source) {
   gap: 4px;
   min-width: 160px;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: 2px solid #e5e5e5;
-  background: #fafafa;
+  border-radius: var(--xm-radius);
+  border: 2px solid var(--xm-border);
+  background: var(--xm-surface-soft);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -337,7 +337,7 @@ async function locateDocument(source) {
 }
 
 .collection-meta {
-  color: #888;
+  color: var(--xm-text-muted);
   font-size: 12px;
 }
 
@@ -354,8 +354,8 @@ async function locateDocument(source) {
   align-items: center;
   padding: 16px;
   background: white;
-  border-radius: 12px;
-  border: 2px solid #e5e5e5;
+  border-radius: var(--xm-radius);
+  border: 2px solid var(--xm-border);
 }
 
 .stat-num {
@@ -367,7 +367,7 @@ async function locateDocument(source) {
 .stat-label {
   font-size: 12px;
   font-weight: 700;
-  color: #999;
+  color: var(--xm-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-top: 4px;
@@ -400,7 +400,7 @@ async function locateDocument(source) {
 
 .import-hint {
   font-size: 13px;
-  color: #999;
+  color: var(--xm-text-muted);
   margin-top: 2px;
 }
 
@@ -419,7 +419,7 @@ async function locateDocument(source) {
   margin-top: 10px;
   padding: 12px 14px;
   border: 1px solid #e1f1d7;
-  border-radius: 14px;
+  border-radius: var(--xm-radius-lg);
   background: #f7fbf3;
 }
 
@@ -432,7 +432,7 @@ async function locateDocument(source) {
 }
 
 .located-source p {
-  color: #333;
+  color: var(--xm-text);
   font-size: 14px;
   font-weight: 800;
 }
@@ -450,9 +450,9 @@ async function locateDocument(source) {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #f7f7f7;
+  background: var(--xm-surface-soft);
   border: 2px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--xm-radius-sm);
   transition:
     border-color 0.18s,
     background 0.18s,
@@ -484,7 +484,7 @@ async function locateDocument(source) {
 .chunk-preview {
   margin-top: 10px;
   padding: 10px;
-  border-radius: 10px;
+  border-radius: var(--xm-radius-sm);
   border: 1px dashed #bfe7c2;
   background: #ffffff;
 }
@@ -509,13 +509,13 @@ async function locateDocument(source) {
   color: #ccc;
   cursor: pointer;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--xm-radius-sm);
   transition: all 0.15s;
 }
 
 .btn-delete:hover {
   color: #ef4444;
-  background: #fee2e2;
+  background: var(--xm-danger-bg);
 }
 
 .steps {
@@ -529,8 +529,8 @@ async function locateDocument(source) {
   align-items: flex-start;
   gap: 12px;
   padding: 10px;
-  background: #f7f7f7;
-  border-radius: 8px;
+  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius-sm);
 }
 
 .step-num {
@@ -552,16 +552,16 @@ async function locateDocument(source) {
 }
 .step p {
   font-size: 13px;
-  color: #777;
+  color: var(--xm-text-light);
   margin-top: 2px;
 }
 
 .error-msg {
   margin-top: 12px;
   padding: 10px 14px;
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: 8px;
+  background: var(--xm-danger-bg);
+  color: var(--xm-danger-text);
+  border-radius: var(--xm-radius-sm);
   font-size: 14px;
   font-weight: 600;
   white-space: pre-wrap;

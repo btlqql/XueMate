@@ -216,9 +216,9 @@ onUnmounted(() => {
 
 <style scoped>
 .sort-animator {
-  background: #fafafa;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
+  background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius);
   overflow: hidden;
   margin: 8px 0;
 }
@@ -226,7 +226,7 @@ onUnmounted(() => {
   padding: 10px 16px 0;
   font-weight: 700;
   font-size: 15px;
-  color: #333;
+  color: var(--xm-text);
 }
 .anim-desc {
   padding: 4px 16px 0;
@@ -247,7 +247,7 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 16px;
   background: white;
-  border-top: 1px solid #e5e5e5;
+  border-top: 1px solid var(--xm-border);
 }
 .ctrl-btn {
   display: flex;
@@ -256,7 +256,7 @@ onUnmounted(() => {
   width: 30px;
   height: 30px;
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: var(--xm-radius-sm);
   background: white;
   cursor: pointer;
   color: #555;
@@ -285,7 +285,7 @@ onUnmounted(() => {
 }
 .step-indicator {
   font-size: 12px;
-  color: #999;
+  color: var(--xm-text-muted);
   font-weight: 600;
   margin-left: 8px;
   min-width: 40px;

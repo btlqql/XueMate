@@ -205,8 +205,8 @@ const deleteTask = async (task) => {
   align-items: flex-start;
   gap: 14px;
   padding: 16px 20px;
-  background: #f7f7f7;
-  border-radius: 12px;
+  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius);
   transition: background 0.15s;
 }
 
@@ -223,8 +223,8 @@ const deleteTask = async (task) => {
 .task-check {
   width: 28px;
   height: 28px;
-  border: 3px solid #e5e5e5;
-  border-radius: 8px;
+  border: 3px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -290,8 +290,8 @@ const deleteTask = async (task) => {
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: #f7f7f7;
-  border-radius: 8px;
+  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius-sm);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -310,9 +310,9 @@ const deleteTask = async (task) => {
 .error-msg {
   margin-top: 12px;
   padding: 10px 14px;
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: 8px;
+  background: var(--xm-danger-bg);
+  color: var(--xm-danger-text);
+  border-radius: var(--xm-radius-sm);
   font-size: 14px;
   font-weight: 600;
 }
@@ -320,6 +320,6 @@ const deleteTask = async (task) => {
 .empty-state {
   text-align: center;
   padding: 40px;
-  color: #999;
+  color: var(--xm-text-muted);
 }
 </style>

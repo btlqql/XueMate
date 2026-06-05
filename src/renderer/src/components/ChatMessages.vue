@@ -141,7 +141,7 @@ const {
 .welcome-icon {
   width: 72px;
   height: 72px;
-  background: #dcfce7;
+  background: var(--xm-success-bg);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -152,13 +152,13 @@ const {
 .welcome-title {
   font-size: 22px;
   font-weight: 800;
-  color: #333;
+  color: var(--xm-text);
   margin: 0 0 8px;
 }
 
 .welcome-desc {
   font-size: 14px;
-  color: #999;
+  color: var(--xm-text-muted);
   margin: 0 0 24px;
 }
 
@@ -173,7 +173,7 @@ const {
 .suggestion-btn {
   padding: 8px 16px;
   border: 1px solid var(--xm-border);
-  border-radius: 9999px;
+  border-radius: var(--xm-radius-pill);
   background: white;
   font-size: 13px;
   color: #555;
@@ -195,7 +195,7 @@ const {
 
 .quick-entry-title {
   margin-bottom: 10px;
-  color: #888;
+  color: var(--xm-text-muted);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.8px;
@@ -215,7 +215,7 @@ const {
   min-height: 74px;
   padding: 14px;
   border: 2px solid var(--xm-border);
-  border-radius: 16px;
+  border-radius: var(--xm-radius-lg);
   background: white;
   cursor: pointer;
   text-align: left;
@@ -235,8 +235,8 @@ const {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: #f7f7f7;
+  border-radius: var(--xm-radius);
+  background: var(--xm-surface-soft);
   font-size: 20px;
   flex-shrink: 0;
 }
@@ -249,13 +249,13 @@ const {
 }
 
 .quick-text strong {
-  color: #333;
+  color: var(--xm-text);
   font-size: 14px;
   font-weight: 900;
 }
 
 .quick-text small {
-  color: #888;
+  color: var(--xm-text-muted);
   font-size: 12px;
   line-height: 1.3;
 }
@@ -308,8 +308,8 @@ const {
 }
 
 .msg-assistant .msg-bubble {
-  background: #f7f7f7;
-  color: #333;
+  background: var(--xm-surface-soft);
+  color: var(--xm-text);
   border-radius: 16px 16px 16px 4px;
   padding: 10px 14px;
 }
@@ -370,7 +370,7 @@ const {
   background: #e8e8e8;
   padding: 1px 5px;
   border-radius: 4px;
-  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+  font-family: var(--xm-font-mono);
   font-size: 13px;
 }
 
@@ -378,7 +378,7 @@ const {
   background: #1a1a2e;
   color: #e0e0e0;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--xm-radius-sm);
   overflow-x: auto;
   margin: 8px 0;
 }

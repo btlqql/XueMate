@@ -138,9 +138,9 @@ onUnmounted(() => {
 
 <style scoped>
 .formula-animator {
-  background: #fafafa;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
+  background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius);
   overflow: hidden;
   margin: 8px 0;
 }
@@ -149,7 +149,7 @@ onUnmounted(() => {
   padding: 12px 16px 0;
   font-weight: 800;
   font-size: 15px;
-  color: #333;
+  color: var(--xm-text);
 }
 
 .problem-box,
@@ -159,9 +159,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--xm-radius-sm);
   background: white;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--xm-border);
 }
 
 .problem-label,
@@ -170,7 +170,7 @@ onUnmounted(() => {
   font-weight: 800;
   color: white;
   background: #2196f3;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   padding: 3px 8px;
 }
 
@@ -189,16 +189,16 @@ onUnmounted(() => {
   padding: 18px 16px;
   background: linear-gradient(135deg, #ffffff, #f0fdf4);
   border: 2px solid rgba(88, 204, 2, 0.22);
-  border-radius: 12px;
+  border-radius: var(--xm-radius);
   text-align: center;
 }
 
 .step-badge {
   display: inline-block;
   padding: 3px 10px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
+  border-radius: var(--xm-radius-pill);
+  background: var(--xm-success-bg);
+  color: var(--xm-success-text);
   font-size: 12px;
   font-weight: 800;
   margin-bottom: 10px;
@@ -217,9 +217,9 @@ onUnmounted(() => {
   display: inline-block;
   margin: 10px 4px 0;
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   background: #eff6ff;
-  color: #1d4ed8;
+  color: var(--xm-info-text);
   font-size: 12px;
   font-weight: 700;
 }
@@ -248,8 +248,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   width: 100%;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   background: white;
   padding: 9px 10px;
   text-align: left;
@@ -296,7 +296,7 @@ onUnmounted(() => {
 
 .anim-empty {
   padding: 14px 16px;
-  color: #999;
+  color: var(--xm-text-muted);
   font-size: 13px;
 }
 
@@ -307,12 +307,12 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 16px;
   background: white;
-  border-top: 1px solid #e5e5e5;
+  border-top: 1px solid var(--xm-border);
 }
 
 .ctrl-btn {
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: var(--xm-radius-sm);
   background: white;
   cursor: pointer;
   min-width: 32px;
@@ -340,7 +340,7 @@ onUnmounted(() => {
 
 .step-indicator {
   font-size: 12px;
-  color: #777;
+  color: var(--xm-text-light);
   font-weight: 700;
 }
 </style>

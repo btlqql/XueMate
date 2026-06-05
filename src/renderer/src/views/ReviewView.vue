@@ -121,8 +121,8 @@ const generateOutline = async () => {
 
 .chapter-item {
   padding: 10px 12px;
-  background: #f7f7f7;
-  border-radius: 8px;
+  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius-sm);
 }
 
 .chapter-header {
@@ -139,7 +139,7 @@ const generateOutline = async () => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #e5e5e5;
+  background: var(--xm-border);
 }
 .freq-dot.active { background: var(--xm-green); }
 
@@ -147,8 +147,8 @@ const generateOutline = async () => {
 .point-tag {
   padding: 2px 10px;
   background: white;
-  border: 1px solid #e5e5e5;
-  border-radius: 9999px;
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-pill);
   font-size: 12px;
   font-weight: 600;
 }
@@ -164,8 +164,8 @@ const generateOutline = async () => {
 .tips-list { display: flex; flex-direction: column; gap: 4px; }
 .tip-item {
   padding: 8px 12px;
-  background: #dbeafe;
-  border-radius: 6px;
+  background: var(--xm-info-bg);
+  border-radius: var(--xm-radius-sm);
   font-size: 13px;
   font-weight: 600;
 }
@@ -176,13 +176,13 @@ const generateOutline = async () => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: #f7f7f7;
-  border-radius: 8px;
+  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius-sm);
   font-size: 14px;
   font-weight: 600;
 }
 .plan-item.highlight {
-  background: #dcfce7;
+  background: var(--xm-success-bg);
   border: 2px solid var(--xm-green);
 }
 .plan-day {
@@ -206,11 +206,11 @@ const generateOutline = async () => {
 }
 .feature {
   padding: 12px;
-  background: #f7f7f7;
-  border-radius: 8px;
+  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius-sm);
 }
 .feature strong { font-size: 14px; display: block; margin-bottom: 2px; }
-.feature p { font-size: 13px; color: #777; }
+.feature p { font-size: 13px; color: var(--xm-text-light); }
 
 @media (max-width: 800px) {
   .outline-layout { grid-template-columns: 1fr; }
@@ -220,9 +220,9 @@ const generateOutline = async () => {
 .error-msg {
   margin-top: 12px;
   padding: 10px 14px;
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: 8px;
+  background: var(--xm-danger-bg);
+  color: var(--xm-danger-text);
+  border-radius: var(--xm-radius-sm);
   font-size: 14px;
   font-weight: 600;
 }

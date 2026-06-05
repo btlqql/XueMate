@@ -114,9 +114,9 @@ onUnmounted(() => {
 
 <style scoped>
 .step-animator {
-  background: #fafafa;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
+  background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius);
   overflow: hidden;
   margin: 8px 0;
 }
@@ -125,7 +125,7 @@ onUnmounted(() => {
   padding: 12px 16px 0;
   font-weight: 800;
   font-size: 15px;
-  color: #333;
+  color: var(--xm-text);
 }
 
 .step-track {
@@ -141,10 +141,10 @@ onUnmounted(() => {
   gap: 6px;
   min-width: max-content;
   padding: 8px 10px;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   background: white;
-  border: 1px solid #e5e5e5;
-  color: #777;
+  border: 1px solid var(--xm-border);
+  color: var(--xm-text-light);
   font-size: 12px;
   font-weight: 700;
 }
@@ -156,9 +156,9 @@ onUnmounted(() => {
 }
 
 .step-node.done {
-  background: #dcfce7;
+  background: var(--xm-success-bg);
   border-color: #bbf7d0;
-  color: #166534;
+  color: var(--xm-success-text);
 }
 
 .step-dot {
@@ -182,14 +182,14 @@ onUnmounted(() => {
   margin: 0 16px 12px;
   padding: 14px 16px;
   background: white;
-  border-radius: 10px;
-  border: 1px solid #e5e5e5;
+  border-radius: var(--xm-radius-sm);
+  border: 1px solid var(--xm-border);
 }
 
 .step-card-title {
   font-size: 16px;
   font-weight: 800;
-  color: #333;
+  color: var(--xm-text);
 }
 
 .step-card-desc {
@@ -208,7 +208,7 @@ onUnmounted(() => {
 
 .anim-empty {
   padding: 14px 16px;
-  color: #999;
+  color: var(--xm-text-muted);
   font-size: 13px;
 }
 
@@ -219,12 +219,12 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 16px;
   background: white;
-  border-top: 1px solid #e5e5e5;
+  border-top: 1px solid var(--xm-border);
 }
 
 .ctrl-btn {
   border: 1px solid #ddd;
-  border-radius: 8px;
+  border-radius: var(--xm-radius-sm);
   background: white;
   cursor: pointer;
   min-width: 32px;
@@ -252,7 +252,7 @@ onUnmounted(() => {
 
 .step-indicator {
   font-size: 12px;
-  color: #777;
+  color: var(--xm-text-light);
   font-weight: 700;
 }
 </style>

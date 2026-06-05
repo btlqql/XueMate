@@ -318,8 +318,8 @@ function changeScope(scopeId) {
 <style scoped>
 .graph-card {
   background: white;
-  border: 2px solid #e5e5e5;
-  border-radius: 16px;
+  border: 2px solid var(--xm-border);
+  border-radius: var(--xm-radius-lg);
   padding: 18px;
   margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(88, 204, 2, 0.06);
@@ -337,7 +337,7 @@ function changeScope(scopeId) {
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   background: #e6f7d9;
   color: var(--xm-green-dark);
   font-size: 11px;
@@ -348,7 +348,7 @@ function changeScope(scopeId) {
 }
 
 .graph-desc {
-  color: #777;
+  color: var(--xm-text-light);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -358,7 +358,7 @@ function changeScope(scopeId) {
   align-items: center;
   margin-top: 8px;
   padding: 5px 9px;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   background: #f0f8e9;
   color: var(--xm-green-dark);
   font-size: 12px;
@@ -374,7 +374,7 @@ function changeScope(scopeId) {
 
 .graph-stat {
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--xm-radius);
   background: #f7fbf3;
   border: 1px solid #e1f1d7;
 }
@@ -411,8 +411,8 @@ function changeScope(scopeId) {
   display: flex;
   align-items: center;
   min-width: 280px;
-  border: 2px solid #e5e5e5;
-  border-radius: 12px;
+  border: 2px solid var(--xm-border);
+  border-radius: var(--xm-radius);
   overflow: hidden;
   background: #fff;
 }
@@ -452,7 +452,7 @@ function changeScope(scopeId) {
   border: 1px solid #e1f1d7;
   background: #f7fbf3;
   color: var(--xm-green-dark);
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   padding: 7px 10px;
   font-size: 12px;
   font-weight: 900;
@@ -465,7 +465,7 @@ function changeScope(scopeId) {
   height: 18px;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   background: white;
   color: #8aa47b;
   font-size: 11px;
@@ -492,10 +492,10 @@ function changeScope(scopeId) {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid #e5e5e5;
-  background: #fafafa;
+  border: 1px solid var(--xm-border);
+  background: var(--xm-surface-soft);
   color: #525252;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   padding: 6px 9px;
   font-size: 12px;
   font-weight: 800;
@@ -517,7 +517,7 @@ function changeScope(scopeId) {
   display: inline-block;
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
 }
 
 .graph-body {
@@ -532,9 +532,9 @@ function changeScope(scopeId) {
   width: 100%;
   height: 480px;
   min-height: 480px;
-  border-radius: 16px;
+  border-radius: var(--xm-radius-lg);
   overflow: hidden;
-  border: 2px solid #e5e5e5;
+  border: 2px solid var(--xm-border);
   background:
     radial-gradient(circle at 26% 22%, rgba(88, 204, 2, 0.12), transparent 30%),
     radial-gradient(circle at 76% 30%, rgba(255, 200, 0, 0.13), transparent 30%),
@@ -577,7 +577,7 @@ function changeScope(scopeId) {
   left: 12px;
   bottom: 12px;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   padding: 8px 12px;
   background: rgba(88, 204, 2, 0.92);
   color: white;
@@ -596,7 +596,7 @@ function changeScope(scopeId) {
   gap: 8px;
   max-width: calc(100% - 24px);
   border: 1px solid rgba(88, 204, 2, 0.28);
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   padding: 7px 8px 7px 11px;
   background: rgba(255, 255, 255, 0.92);
   color: var(--xm-green-dark);
@@ -615,7 +615,7 @@ function changeScope(scopeId) {
 .subgraph-badge button {
   flex-shrink: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--xm-radius-pill);
   padding: 4px 8px;
   background: #e6f7d9;
   color: var(--xm-green-dark);
@@ -625,9 +625,9 @@ function changeScope(scopeId) {
 }
 
 .node-panel {
-  border: 1px solid #e5e5e5;
-  border-radius: 16px;
-  background: #fafafa;
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-lg);
+  background: var(--xm-surface-soft);
   padding: 14px;
   overflow: auto;
 }
@@ -635,8 +635,8 @@ function changeScope(scopeId) {
 .node-type {
   display: inline-flex;
   padding: 5px 8px;
-  border-radius: 999px;
-  color: #333;
+  border-radius: var(--xm-radius-pill);
+  color: var(--xm-text);
   font-size: 12px;
   font-weight: 900;
   margin-bottom: 8px;
@@ -649,7 +649,7 @@ function changeScope(scopeId) {
 }
 
 .node-desc {
-  color: #777;
+  color: var(--xm-text-light);
   font-size: 13px;
   line-height: 1.55;
   margin-bottom: 12px;
@@ -671,14 +671,14 @@ function changeScope(scopeId) {
 }
 
 .node-kv b {
-  color: #333;
+  color: var(--xm-text);
 }
 
 .open-scope-btn {
   width: 100%;
   margin-top: 12px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--xm-radius);
   padding: 10px 12px;
   background: var(--xm-green);
   color: white;
@@ -704,7 +704,7 @@ function changeScope(scopeId) {
 .article-hint {
   margin-top: 10px;
   padding: 10px;
-  border-radius: 12px;
+  border-radius: var(--xm-radius);
   border: 1px solid #e1f1d7;
   background: #ffffff;
 }
@@ -718,7 +718,7 @@ function changeScope(scopeId) {
 }
 
 .article-hint p {
-  color: #333;
+  color: var(--xm-text);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.4;
@@ -746,9 +746,9 @@ function changeScope(scopeId) {
 .evidence p {
   padding: 8px;
   background: white;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
-  color: #777;
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
+  color: var(--xm-text-light);
   font-size: 12px;
   line-height: 1.45;
   margin-bottom: 6px;
@@ -758,8 +758,8 @@ function changeScope(scopeId) {
   display: block;
   width: 100%;
   text-align: left;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   background: white;
   padding: 8px;
   margin-bottom: 6px;
@@ -775,7 +775,7 @@ function changeScope(scopeId) {
 
 .link-item b {
   display: block;
-  color: #333;
+  color: var(--xm-text);
   font-size: 13px;
   margin-top: 2px;
 }
@@ -797,8 +797,8 @@ function changeScope(scopeId) {
 .graph-empty {
   min-height: 220px;
   border: 1px dashed #b9d9a2;
-  border-radius: 16px;
-  background: #fafafa;
+  border-radius: var(--xm-radius-lg);
+  background: var(--xm-surface-soft);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -812,14 +812,14 @@ function changeScope(scopeId) {
 }
 
 .graph-empty p {
-  color: #777;
+  color: var(--xm-text-light);
   font-size: 13px;
 }
 
 .graph-loading {
   min-height: 220px;
   border: 1px dashed #b9d9a2;
-  border-radius: 16px;
+  border-radius: var(--xm-radius-lg);
   background: #f7fbf3;
   display: flex;
   align-items: center;
@@ -853,9 +853,9 @@ function changeScope(scopeId) {
 .graph-error {
   margin-bottom: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
-  color: #991b1b;
-  background: #fee2e2;
+  border-radius: var(--xm-radius-sm);
+  color: var(--xm-danger-text);
+  background: var(--xm-danger-bg);
   font-size: 13px;
   font-weight: 700;
 }
