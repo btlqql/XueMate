@@ -12,7 +12,15 @@ const SYSTEM_PROMPT = `你是 XueMate 智能学习助手，面向中小学生。
 4. 所有输出内容必须适合学生阅读
 5. 鼓励积极健康的学习行为`
 
-type AgentState = 'idle' | 'thinking' | 'executing' | 'browsing' | 'waiting_confirm' | 'done' | 'error' | 'stopped'
+type AgentState =
+  | 'idle'
+  | 'thinking'
+  | 'executing'
+  | 'browsing'
+  | 'waiting_confirm'
+  | 'done'
+  | 'error'
+  | 'stopped'
 
 interface AgentStep {
   id: number
@@ -37,25 +45,47 @@ interface AgentContext {
 const MAX_STEPS = 15
 const MAX_BROWSE = 3 // 最多浏览/搜索 3 次
 
-async function planNextStep(ctx: AgentContext): Promise<{
+interface PlanResult {
   thinking: string
   command: string | null
   action: 'shell' | 'search' | 'browse' | 'done'
   query?: string
   url?: string
-}> {
-  const history = ctx.steps.map(s => {
-    let statusText = s.status
-    if (s.status === 'blocked') statusText = '被安全策略禁止'
-    else if (s.status === 'skipped') statusText = '用户拒绝执行'
-    else if (s.status === 'error') statusText = '执行失败'
-    else if (s.status === 'done') statusText = '执行成功'
-    return `步骤${s.id}: ${s.thinking}\n命令: ${s.command}\n输出: ${s.output.slice(0, 500)}\n结果: ${statusText}`
-  }).join('\n\n')
+}
 
-  const webContext = ctx.webMemory.length > 0
-    ? `\n已获取的网页信息：\n${ctx.webMemory.join('\n---\n')}`
-    : ''
+// 校验 plan 是否完整有效
+function validatePlan(plan: PlanResult): boolean {
+  if (!plan.action || !plan.thinking) return false
+  switch (plan.action) {
+    case 'search':
+      return !!plan.query
+    case 'browse':
+      return !!plan.url
+    case 'shell':
+      return !!plan.command
+    case 'done':
+      return true
+    default:
+      return false
+  }
+}
+
+const MAX_RETRIES = 2
+
+async function planNextStep(ctx: AgentContext): Promise<PlanResult> {
+  const history = ctx.steps
+    .map((s) => {
+      let statusText = s.status
+      if (s.status === 'blocked') statusText = '被安全策略禁止'
+      else if (s.status === 'skipped') statusText = '用户拒绝执行'
+      else if (s.status === 'error') statusText = '执行失败'
+      else if (s.status === 'done') statusText = '执行成功'
+      return `步骤${s.id}: ${s.thinking}\n命令: ${s.command}\n输出: ${s.output.slice(0, 500)}\n结果: ${statusText}`
+    })
+    .join('\n\n')
+
+  const webContext =
+    ctx.webMemory.length > 0 ? `\n已获取的网页信息：\n${ctx.webMemory.join('\n---\n')}` : ''
 
   const prompt = `你是一个智能助手，帮助用户在 macOS 上完成任务。你可以：
 1. 执行 shell 命令
@@ -86,52 +116,61 @@ ${history || '（还没有执行任何步骤）'}
 6. 搜索/浏览最多 ${MAX_BROWSE} 次，已用 ${ctx.browseCount} 次，用完后必须用 shell 或 done
 7. 只返回JSON，不要其他文字`
 
-  const result = await chat({
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.3,
-    maxTokens: 512
-  })
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await chat({
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        maxTokens: 512
+      })
 
-  console.log('[Agent] AI 返回:', result)
+      console.log(`[Agent] AI 返回 (尝试 ${attempt + 1}):`, result)
 
-  try {
-    // 提取 JSON（处理 AI 可能返回 markdown 代码块的情况）
-    let jsonStr = result.trim()
-    const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0]
-    }
-
-    const parsed = JSON.parse(jsonStr)
-
-    // 兼容各种格式：推断 action
-    if (!parsed.action) {
-      if (parsed.done === true) {
-        parsed.action = 'done'
-      } else if (parsed.query) {
-        parsed.action = 'search'
-      } else if (parsed.url) {
-        parsed.action = 'browse'
-      } else if (parsed.command) {
-        parsed.action = 'shell'
-      } else {
-        parsed.action = 'done'
+      // 提取 JSON（处理 AI 可能返回 markdown 代码块的情况）
+      let jsonStr = result.trim()
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0]
       }
-    }
 
-    console.log('[Agent] 解析结果:', JSON.stringify(parsed))
-    return parsed
-  } catch (e) {
-    console.error('[Agent] JSON 解析失败:', e, '原始返回:', result)
-    return { thinking: 'AI 返回格式异常，重试中', command: null, action: 'done' }
+      const parsed = JSON.parse(jsonStr)
+
+      // 兼容各种格式：推断 action
+      if (!parsed.action) {
+        if (parsed.done === true) {
+          parsed.action = 'done'
+        } else if (parsed.query) {
+          parsed.action = 'search'
+        } else if (parsed.url) {
+          parsed.action = 'browse'
+        } else if (parsed.command) {
+          parsed.action = 'shell'
+        }
+        // 不再默认 fallback 到 done
+      }
+
+      // 校验完整性：action 必须合法，且对应字段不能缺
+      if (validatePlan(parsed)) {
+        console.log('[Agent] 解析结果:', JSON.stringify(parsed))
+        return parsed
+      }
+
+      console.warn(`[Agent] plan 校验失败 (尝试 ${attempt + 1}):`, JSON.stringify(parsed))
+    } catch (e) {
+      console.error(`[Agent] JSON 解析失败 (尝试 ${attempt + 1}):`, e)
+    }
   }
+
+  // 所有重试都失败，返回 done 但附带错误信息
+  console.error('[Agent] 多次重试均失败，强制结束')
+  return { thinking: 'AI 多次返回格式异常，任务被迫结束', command: null, action: 'done' }
 }
 
 // 搜索安全检查
-async function checkSearchSafety(query: string): Promise<string | null> {
+export async function checkSearchSafety(query: string): Promise<string | null> {
   const result = await chat({
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -149,7 +188,7 @@ async function checkSearchSafety(query: string): Promise<string | null> {
 }
 
 // 总结搜索结果
-async function summarizeResults(query: string, rawText: string): Promise<string> {
+export async function summarizeResults(query: string, rawText: string): Promise<string> {
   const result = await chat({
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -186,7 +225,7 @@ export async function runAgent(
   const sendUpdate = () => {
     onUpdate({
       state: ctx.state,
-      steps: ctx.steps.map(s => ({ ...s })),
+      steps: ctx.steps.map((s) => ({ ...s })),
       stepCount: ctx.stepCount
     })
   }
@@ -203,9 +242,11 @@ export async function runAgent(
       sendUpdate()
 
       const plan = await planNextStep(ctx)
-      console.log(`[Agent] 步骤 ${ctx.stepCount + 1}: action=${plan.action}, command=${plan.command}, query=${plan.query}, url=${plan.url}`)
+      console.log(
+        `[Agent] 步骤 ${ctx.stepCount + 1}: action=${plan.action}, command=${plan.command}, query=${plan.query}, url=${plan.url}`
+      )
 
-      if (plan.action === 'done' || (!plan.command && !plan.query && !plan.url)) {
+      if (plan.action === 'done') {
         ctx.state = 'done'
         sendUpdate()
         return { success: true, steps: ctx.steps }
@@ -252,9 +293,9 @@ export async function runAgent(
 
         try {
           const pages = await searchAndFetch(plan.query)
-          const rawText = pages.map(p =>
-            `【${p.title}】${p.url}\n${p.text.slice(0, 600)}`
-          ).join('\n\n')
+          const rawText = pages
+            .map((p) => `【${p.title}】${p.url}\n${p.text.slice(0, 600)}`)
+            .join('\n\n')
 
           ctx.webMemory.push(rawText)
           ctx.browseCount++
@@ -345,7 +386,6 @@ export async function runAgent(
     ctx.state = 'done'
     sendUpdate()
     return { success: true, steps: ctx.steps }
-
   } catch (error: any) {
     ctx.state = 'error'
     sendUpdate()

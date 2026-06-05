@@ -1,5 +1,4 @@
 import { BrowserView, BrowserWindow } from 'electron'
-import { join } from 'path'
 
 interface PageResult {
   url: string
@@ -8,87 +7,238 @@ interface PageResult {
   links: { text: string; href: string }[]
 }
 
-let activeView: BrowserView | null = null
+export type BrowserAction =
+  | { type: 'click'; x?: number; y?: number; elementId?: string }
+  | { type: 'type'; text: string; elementId?: string; x?: number; y?: number }
+  | { type: 'scroll'; x?: number; y?: number; dy: number; elementId?: string }
+  | { type: 'key'; key: string }
+  | { type: 'wait'; ms?: number }
+  | { type: 'navigate'; url: string }
+  | { type: 'done'; answer?: string }
+
+export interface BrowserState {
+  screenshot: string
+  screenshotMime: string
+  width: number
+  height: number
+  url: string
+  title: string
+  elements: InteractiveElement[]
+}
+
+export interface InteractiveElement {
+  id: string
+  tag: string
+  role: string
+  text: string
+  placeholder: string
+  ariaLabel: string
+  title: string
+  href: string
+  inputType: string
+  value: string
+  rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+    centerX: number
+    centerY: number
+  }
+  visible: boolean
+  disabled: boolean
+  editable: boolean
+  clickable: boolean
+}
+
+export interface LiveBrowserBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+let browserWindow: BrowserWindow | null = null
+let browserView: BrowserView | null = null
 let hostWindow: BrowserWindow | null = null
+let liveBounds: LiveBrowserBounds | null = null
+let liveMode = false
+let viewportWidth = 1000
+let viewportHeight = 650
+const PACE = {
+  beforeAction: 450,
+  afterAction: 700,
+  clickHover: 380,
+  clickDown: 120,
+  typeChar: 55,
+  typeChunkPause: 180,
+  scrollChunk: 240,
+  navigateSettle: 1200
+}
 
 // 设置宿主窗口（在 main/index.ts 里调用）
 export function setHostWindow(win: BrowserWindow): void {
   hostWindow = win
 }
 
-function getOrCreateView(): BrowserView {
-  if (activeView && !activeView.webContents.isDestroyed()) {
-    return activeView
+function getOrCreateBrowserWindow(): BrowserWindow {
+  if (browserWindow && !browserWindow.isDestroyed()) {
+    return browserWindow
   }
-  activeView = new BrowserView({
+
+  browserWindow = new BrowserWindow({
+    show: false,
+    frame: false,
+    useContentSize: true,
+    paintWhenInitiallyHidden: true,
+    width: viewportWidth,
+    height: viewportHeight,
+    parent: hostWindow || undefined,
     webPreferences: {
       sandbox: false,
-      offscreen: true,
-      preload: join(__dirname, '../preload/index.js')
+      backgroundThrottling: false
     }
   })
-  // 忽略 SSL 证书错误
-  activeView.webContents.on('certificate-error', (_event, _url, _error, _cert, callback) => {
-    callback(true)
-  })
-  // 设置 User-Agent
-  activeView.webContents.setUserAgent(
+
+  browserWindow.webContents.setUserAgent(
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   )
-  return activeView
+  installNavigationGuards(browserWindow.webContents)
+
+  browserWindow.on('closed', () => {
+    browserWindow = null
+  })
+
+  return browserWindow
 }
 
-// 显示浏览器，对齐到 Vue 的 fixed 定位面板
-export function showBrowserAtHeight(): void {
-  if (!hostWindow || hostWindow.isDestroyed()) return
-  const view = getOrCreateView()
-  hostWindow.addBrowserView(view)
-
-  const { width, height } = hostWindow.getContentBounds()
-  const toolbarHeight = 34
-  const contentHeight = 260
-  const totalHeight = toolbarHeight + contentHeight
-  const margin = 16
-
-  const bounds = {
-    x: margin,
-    y: height - totalHeight - toolbarHeight,
-    width: width - margin * 2,
-    height: contentHeight
+function getOrCreateBrowserView(): BrowserView {
+  if (browserView && !browserView.webContents.isDestroyed()) {
+    return browserView
   }
-  console.log('[Web] window:', width, height, 'bounds:', bounds)
-  view.setBounds(bounds)
+
+  browserView = new BrowserView({
+    webPreferences: {
+      sandbox: false,
+      backgroundThrottling: false
+    }
+  })
+
+  browserView.webContents.setUserAgent(
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  )
+  installNavigationGuards(browserView.webContents)
+
+  return browserView
+}
+
+// 前端把“网页截图/实时网页”盒子的坐标传进来，BrowserView 会盖在这个区域上。
+export function setLiveBrowserBounds(bounds: LiveBrowserBounds | null): void {
+  if (!bounds || bounds.width < 120 || bounds.height < 100) {
+    liveBounds = null
+    detachLiveView()
+    return
+  }
+
+  const nextBounds = sanitizeLiveBounds(bounds)
+  if (liveBounds && isSameBounds(liveBounds, nextBounds)) {
+    return
+  }
+
+  liveBounds = nextBounds
+  if (liveMode) {
+    attachAndLayoutLiveView()
+  }
+}
+
+// 兼容旧调用。
+export function showBrowserAtHeight(_contentHeight = 260): void {
+  prepareHiddenBrowserViewport()
+}
+
+export function showBrowserInPanel(): void {
+  prepareHiddenBrowserViewport()
+}
+
+export function prepareHiddenBrowserViewport(width = 1000, height = 650): void {
+  if (liveBounds && hostWindow && !hostWindow.isDestroyed()) {
+    liveMode = true
+    closeHiddenWindow()
+    attachAndLayoutLiveView()
+    console.log('[Web] live BrowserView viewport:', liveBounds)
+    return
+  }
+
+  liveMode = false
+  detachLiveView()
+  viewportWidth = width
+  viewportHeight = height
+  const win = getOrCreateBrowserWindow()
+  win.setContentSize(width, height, false)
+  win.hide()
+  console.log('[Web] hidden BrowserWindow viewport:', { width, height })
 }
 
 // 隐藏浏览器
 export function hideBrowser(): void {
-  if (!hostWindow || hostWindow.isDestroyed()) return
-  if (activeView && !activeView.webContents.isDestroyed()) {
-    hostWindow.removeBrowserView(activeView)
+  detachLiveView()
+  if (browserWindow && !browserWindow.isDestroyed()) {
+    browserWindow.hide()
+  }
+}
+
+export async function openBrowserUrl(url: string, throwOnFailure = false): Promise<void> {
+  const webContents = getActiveWebContents()
+  const normalized = normalizeUrl(url)
+
+  let lastError: any = null
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await webContents.loadURL(normalized)
+      await waitForPageSettle(webContents, 800)
+      return
+    } catch (err: any) {
+      lastError = err
+      console.error(`[Web] openBrowserUrl 失败(${attempt}/2):`, err.message)
+      if (!isTransientLoadError(err) || attempt === 2) break
+      await sleep(900)
+    }
+  }
+
+  await waitForPageSettle(webContents, 300)
+  if (throwOnFailure) {
+    throw new Error(formatLoadError(lastError, normalized))
   }
 }
 
 // 打开网页并提取内容
 export async function fetchPage(url: string): Promise<PageResult> {
   console.log('[Web] fetchPage:', url)
-  const view = getOrCreateView()
+  const win = getOrCreateBrowserWindow()
 
   try {
-    await view.webContents.loadURL(url)
+    await win.loadURL(normalizeUrl(url))
   } catch (err: any) {
     console.error('[Web] loadURL 失败:', err.message)
   }
 
-  await sleep(2000)
+  // 每次导航后清理缓存，防止内存累积
+  try {
+    win.webContents.session.clearCache()
+  } catch {
+    /* ignore */
+  }
 
-  const data = await view.webContents.executeJavaScript(`
+  await sleep(1500)
+
+  const data = await win.webContents.executeJavaScript(`
     (function() {
       const clone = document.body.cloneNode(true)
       clone.querySelectorAll('script, style, noscript, svg, nav, footer, header').forEach(el => el.remove())
 
       const text = clone.innerText
-        .replace(/\\n{3,}/g, '\\n\\n')
-        .replace(/\\s+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 8000)
 
@@ -115,9 +265,91 @@ export async function fetchPage(url: string): Promise<PageResult> {
 
 // 截图
 export async function captureScreenshot(): Promise<string> {
-  const view = getOrCreateView()
-  const image = await view.webContents.capturePage()
-  return image.toPNG().toString('base64')
+  const state = await captureBrowserState()
+  return state.screenshot
+}
+
+export async function captureBrowserState(): Promise<BrowserState> {
+  const webContents = getActiveWebContents()
+  await waitForPageSettle(webContents, 150)
+  const [image, elements] = await Promise.all([
+    webContents.capturePage(),
+    extractInteractiveElements(webContents)
+  ])
+  const normalizedImage = image.resize({ width: viewportWidth, height: viewportHeight, quality: 'good' })
+  const size = normalizedImage.getSize()
+  return {
+    screenshot: normalizedImage.toJPEG(72).toString('base64'),
+    screenshotMime: 'image/jpeg',
+    width: size.width,
+    height: size.height,
+    url: webContents.getURL(),
+    title: webContents.getTitle(),
+    elements
+  }
+}
+
+export async function performBrowserAction(
+  action: BrowserAction,
+  elements: InteractiveElement[] = []
+): Promise<void> {
+  const webContents = getActiveWebContents()
+
+  switch (action.type) {
+    case 'click': {
+      const { x, y } = resolveActionPoint(action, elements)
+      await sleep(PACE.beforeAction)
+      webContents.sendInputEvent({ type: 'mouseMove', x, y })
+      await sleep(PACE.clickHover)
+      webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+      await sleep(PACE.clickDown)
+      webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+      await waitForPageSettle(webContents, PACE.afterAction)
+      return
+    }
+    case 'type': {
+      if (action.text) {
+        if (action.elementId || (action.x !== undefined && action.y !== undefined)) {
+          const { x, y } = resolveActionPoint(action, elements)
+          await clickPoint(webContents, x, y)
+        }
+        await sleep(PACE.beforeAction)
+        await typeSlowly(webContents, action.text)
+      }
+      await sleep(PACE.afterAction)
+      return
+    }
+    case 'scroll': {
+      const { x, y } =
+        action.elementId || (action.x !== undefined && action.y !== undefined)
+          ? resolveActionPoint(action, elements)
+          : toViewPoint(500, 500)
+      await sleep(PACE.beforeAction)
+      await scrollSlowly(webContents, x, y, normalizeScrollDelta(action.dy))
+      await sleep(PACE.afterAction)
+      return
+    }
+    case 'key': {
+      const keyCode = normalizeKey(action.key)
+      await sleep(PACE.beforeAction)
+      webContents.sendInputEvent({ type: 'keyDown', keyCode })
+      await sleep(120)
+      webContents.sendInputEvent({ type: 'keyUp', keyCode })
+      await sleep(PACE.afterAction)
+      return
+    }
+    case 'wait': {
+      await sleep(Math.min(Math.max(action.ms ?? 1000, 300), 5000))
+      return
+    }
+    case 'navigate': {
+      await openBrowserUrl(action.url, true)
+      await sleep(PACE.navigateSettle)
+      return
+    }
+    case 'done':
+      return
+  }
 }
 
 // 搜索并抓取结果页
@@ -125,13 +357,16 @@ export async function searchAndFetch(query: string): Promise<PageResult[]> {
   const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}`
   const result = await fetchPage(searchUrl)
 
-  const resultLinks = result.links.filter(l =>
-    l.href.startsWith('http') &&
-    !l.href.includes('bing.com') &&
-    !l.href.includes('microsoft.com') &&
-    !l.href.includes('go.microsoft.com') &&
-    l.text.length > 5
-  ).slice(0, 3)
+  const resultLinks = result.links
+    .filter(
+      (l) =>
+        l.href.startsWith('http') &&
+        !l.href.includes('bing.com') &&
+        !l.href.includes('microsoft.com') &&
+        !l.href.includes('go.microsoft.com') &&
+        l.text.length > 5
+    )
+    .slice(0, 3)
 
   const pages: PageResult[] = [result]
 
@@ -149,13 +384,425 @@ export async function searchAndFetch(query: string): Promise<PageResult[]> {
 
 // 清理
 export function destroyWebView(): void {
-  hideBrowser()
-  if (activeView && !activeView.webContents.isDestroyed()) {
-    activeView.webContents.close()
+  detachLiveView()
+  if (browserView && !browserView.webContents.isDestroyed()) {
+    browserView.webContents.close()
   }
-  activeView = null
+  browserView = null
+  if (browserWindow && !browserWindow.isDestroyed()) {
+    browserWindow.close()
+  }
+  browserWindow = null
+  liveMode = false
+}
+
+export function finishBrowserRun(): void {
+  if (liveMode && browserView && !browserView.webContents.isDestroyed()) {
+    return
+  }
+  destroyWebView()
+}
+
+function normalizeUrl(url: string): string {
+  const trimmed = url.trim()
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(trimmed)) return `https://${trimmed}`
+  return `https://www.bing.com/search?q=${encodeURIComponent(trimmed)}`
+}
+
+function toViewPoint(normX: number, normY: number): { x: number; y: number } {
+  const x = Math.round((clamp(normX, 0, 1000) / 1000) * viewportWidth)
+  const y = Math.round((clamp(normY, 0, 1000) / 1000) * viewportHeight)
+  return { x, y }
+}
+
+function resolveActionPoint(
+  action: { x?: number; y?: number; elementId?: string },
+  elements: InteractiveElement[]
+): { x: number; y: number } {
+  if (action.elementId) {
+    const element = elements.find((item) => item.id === action.elementId)
+    if (element) {
+      return {
+        x: Math.round(clamp(element.rect.centerX, 0, viewportWidth)),
+        y: Math.round(clamp(element.rect.centerY, 0, viewportHeight))
+      }
+    }
+  }
+
+  return toViewPoint(action.x ?? 500, action.y ?? 500)
+}
+
+function normalizeScrollDelta(dy: number): number {
+  if (!Number.isFinite(dy)) return 500
+  // 模型输出使用 -1000~1000 的相对强度；Electron 直接接收 wheel delta。
+  return Math.round(clamp(dy, -1000, 1000))
+}
+
+function normalizeKey(key: string): string {
+  const normalized = (key || '').trim()
+  const keyMap: Record<string, string> = {
+    enter: 'Enter',
+    return: 'Enter',
+    esc: 'Escape',
+    escape: 'Escape',
+    backspace: 'Backspace',
+    tab: 'Tab',
+    space: 'Space',
+    arrowup: 'Up',
+    arrowdown: 'Down',
+    arrowleft: 'Left',
+    arrowright: 'Right'
+  }
+  return keyMap[normalized.toLowerCase()] || normalized || 'Enter'
+}
+
+function installNavigationGuards(webContents: Electron.WebContents): void {
+  // 很多站点（微博、登录页、广告页）会用 target=_blank/window.open。
+  // 默认会创建新的 Electron guest window，看起来像“跳出另一个进程”。
+  // 这里统一拦截，让 http/https 在当前内置浏览器里打开，非网页协议直接拦下。
+  webContents.setWindowOpenHandler(({ url }) => {
+    void openPopupUrlInSameView(webContents, url)
+    return { action: 'deny' }
+  })
+
+  webContents.on('will-navigate', (event, url) => {
+    if (!isWebUrl(url)) {
+      event.preventDefault()
+      console.warn('[Web] blocked external protocol:', url)
+    }
+  })
+}
+
+async function openPopupUrlInSameView(
+  webContents: Electron.WebContents,
+  url: string
+): Promise<void> {
+  if (webContents.isDestroyed()) return
+  if (!isWebUrl(url)) {
+    console.warn('[Web] blocked popup external protocol:', url)
+    return
+  }
+
+  try {
+    await webContents.loadURL(url)
+  } catch (error: any) {
+    console.error('[Web] popup 在当前浏览器打开失败:', error.message)
+  }
+}
+
+function isWebUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url)
+}
+
+async function extractInteractiveElements(
+  webContents: Electron.WebContents
+): Promise<InteractiveElement[]> {
+  try {
+    const raw = await webContents.executeJavaScript(
+      `
+      (() => {
+        const selectors = [
+          'a[href]',
+          'button',
+          'input',
+          'textarea',
+          'select',
+          '[role]',
+          '[contenteditable="true"]',
+          '[tabindex]',
+          'summary',
+          'label'
+        ].join(',')
+
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1
+        const seen = new Set()
+        const candidates = Array.from(document.querySelectorAll(selectors))
+
+        function clean(value, max = 120) {
+          return String(value || '')
+            .replace(/\\s+/g, ' ')
+            .trim()
+            .slice(0, max)
+        }
+
+        function isVisible(el, rect, style) {
+          if (!rect || rect.width <= 0 || rect.height <= 0) return false
+          if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+            return false
+          }
+          if (rect.bottom < 0 || rect.right < 0 || rect.top > viewportHeight || rect.left > viewportWidth) {
+            return false
+          }
+          return true
+        }
+
+        function inferRole(el) {
+          const explicit = el.getAttribute('role')
+          if (explicit) return explicit
+          const tag = el.tagName.toLowerCase()
+          if (tag === 'a') return 'link'
+          if (tag === 'button') return 'button'
+          if (tag === 'textarea') return 'textbox'
+          if (tag === 'select') return 'combobox'
+          if (tag === 'summary') return 'button'
+          if (tag === 'input') {
+            const type = (el.getAttribute('type') || 'text').toLowerCase()
+            if (['button', 'submit', 'reset'].includes(type)) return 'button'
+            if (['checkbox', 'radio', 'range', 'date', 'file'].includes(type)) return type
+            if (['search'].includes(type)) return 'searchbox'
+            return 'textbox'
+          }
+          if (el.isContentEditable) return 'textbox'
+          return 'generic'
+        }
+
+        function elementText(el) {
+          const aria = clean(el.getAttribute('aria-label'))
+          const labelledBy = clean(
+            (el.getAttribute('aria-labelledby') || '')
+              .split(/\\s+/)
+              .map((id) => document.getElementById(id)?.innerText || '')
+              .join(' ')
+          )
+          const alt = clean(el.getAttribute('alt'))
+          const value = ['button', 'submit', 'reset'].includes((el.getAttribute('type') || '').toLowerCase())
+            ? clean(el.getAttribute('value'))
+            : ''
+          const inner = clean(el.innerText || el.textContent)
+          return aria || labelledBy || alt || value || inner
+        }
+
+        return candidates
+          .map((el) => {
+            if (!(el instanceof HTMLElement)) return null
+            if (seen.has(el)) return null
+            seen.add(el)
+
+            const rect = el.getBoundingClientRect()
+            const style = window.getComputedStyle(el)
+            const tag = el.tagName.toLowerCase()
+            const role = inferRole(el)
+            const disabled =
+              el.hasAttribute('disabled') ||
+              el.getAttribute('aria-disabled') === 'true' ||
+              style.pointerEvents === 'none'
+            const editable =
+              el.isContentEditable ||
+              tag === 'textarea' ||
+              (tag === 'input' &&
+                !['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'hidden'].includes(
+                  (el.getAttribute('type') || 'text').toLowerCase()
+                ))
+            const clickable =
+              tag === 'a' ||
+              tag === 'button' ||
+              role === 'button' ||
+              role === 'link' ||
+              el.hasAttribute('onclick') ||
+              el.tabIndex >= 0 ||
+              editable
+
+            const visible = isVisible(el, rect, style)
+            if (!visible && !editable && !clickable) return null
+
+            const clippedLeft = Math.max(0, rect.left)
+            const clippedTop = Math.max(0, rect.top)
+            const clippedRight = Math.min(viewportWidth, rect.right)
+            const clippedBottom = Math.min(viewportHeight, rect.bottom)
+            const width = Math.max(0, clippedRight - clippedLeft)
+            const height = Math.max(0, clippedBottom - clippedTop)
+            if (width < 2 || height < 2) return null
+
+            return {
+              tag,
+              role,
+              text: elementText(el),
+              placeholder: clean(el.getAttribute('placeholder')),
+              ariaLabel: clean(el.getAttribute('aria-label')),
+              title: clean(el.getAttribute('title')),
+              href: clean(el instanceof HTMLAnchorElement ? el.href : ''),
+              inputType: clean(el.getAttribute('type')),
+              value: editable ? clean(el.value, 80) : '',
+              rect: {
+                x: clippedLeft,
+                y: clippedTop,
+                width,
+                height,
+                centerX: clippedLeft + width / 2,
+                centerY: clippedTop + height / 2
+              },
+              visible,
+              disabled,
+              editable,
+              clickable
+            }
+          })
+          .filter(Boolean)
+          .filter((item) =>
+            item.clickable ||
+            item.editable ||
+            item.text ||
+            item.placeholder ||
+            item.ariaLabel ||
+            item.title
+          )
+          .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
+          .slice(0, 80)
+          .map((item, index) => ({ id: 'e' + (index + 1), ...item }))
+      })()
+      `,
+      true
+    )
+
+    return Array.isArray(raw) ? raw : []
+  } catch (error: any) {
+    console.warn('[Web] DOM 元素抽取失败:', error.message)
+    return []
+  }
+}
+
+async function typeSlowly(webContents: Electron.WebContents, text: string): Promise<void> {
+  const chars = Array.from(text)
+  for (let i = 0; i < chars.length; i++) {
+    await webContents.insertText(chars[i])
+    await sleep(PACE.typeChar)
+    if ((i + 1) % 12 === 0) {
+      await sleep(PACE.typeChunkPause)
+    }
+  }
+}
+
+async function clickPoint(webContents: Electron.WebContents, x: number, y: number): Promise<void> {
+  await sleep(PACE.beforeAction)
+  webContents.sendInputEvent({ type: 'mouseMove', x, y })
+  await sleep(PACE.clickHover)
+  webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+  await sleep(PACE.clickDown)
+  webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+  await sleep(PACE.afterAction)
+}
+
+async function scrollSlowly(
+  webContents: Electron.WebContents,
+  x: number,
+  y: number,
+  deltaY: number
+): Promise<void> {
+  const chunks = Math.max(3, Math.min(7, Math.ceil(Math.abs(deltaY) / 180)))
+  const perChunk = Math.round(deltaY / chunks)
+  for (let i = 0; i < chunks; i++) {
+    webContents.sendInputEvent({
+      type: 'mouseWheel',
+      x,
+      y,
+      deltaY: perChunk
+    })
+    await sleep(PACE.scrollChunk)
+  }
+}
+
+function getActiveWebContents(): Electron.WebContents {
+  if (liveMode) {
+    attachAndLayoutLiveView()
+    return getOrCreateBrowserView().webContents
+  }
+  return getOrCreateBrowserWindow().webContents
+}
+
+function attachAndLayoutLiveView(): void {
+  if (!hostWindow || hostWindow.isDestroyed() || !liveBounds) return
+  const view = getOrCreateBrowserView()
+  if (!hostWindow.getBrowserViews().includes(view)) {
+    hostWindow.addBrowserView(view)
+  }
+
+  const safeBounds = sanitizeLiveBounds(liveBounds)
+  liveBounds = safeBounds
+  viewportWidth = safeBounds.width
+  viewportHeight = safeBounds.height
+  view.setBounds(safeBounds)
+  view.setAutoResize({ width: false, height: false })
+}
+
+function detachLiveView(): void {
+  if (!hostWindow || hostWindow.isDestroyed() || !browserView) return
+  try {
+    if (hostWindow.getBrowserViews().includes(browserView)) {
+      hostWindow.removeBrowserView(browserView)
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function closeHiddenWindow(): void {
+  if (browserWindow && !browserWindow.isDestroyed()) {
+    browserWindow.close()
+  }
+  browserWindow = null
+}
+
+function sanitizeLiveBounds(bounds: LiveBrowserBounds): LiveBrowserBounds {
+  const content = hostWindow?.getContentBounds()
+  const maxWidth = content?.width || 1200
+  const maxHeight = content?.height || 800
+  const x = Math.max(0, Math.round(bounds.x))
+  const y = Math.max(0, Math.round(bounds.y))
+  const width = Math.max(120, Math.min(Math.round(bounds.width), maxWidth - x))
+  const height = Math.max(100, Math.min(Math.round(bounds.height), maxHeight - y))
+  return { x, y, width, height }
+}
+
+function isSameBounds(a: LiveBrowserBounds, b: LiveBrowserBounds): boolean {
+  const tolerance = 2
+  return (
+    Math.abs(a.x - b.x) <= tolerance &&
+    Math.abs(a.y - b.y) <= tolerance &&
+    Math.abs(a.width - b.width) <= tolerance &&
+    Math.abs(a.height - b.height) <= tolerance
+  )
+}
+
+function isTransientLoadError(error: any): boolean {
+  return /ERR_TIMED_OUT|ERR_NETWORK_CHANGED|ERR_CONNECTION|ERR_INTERNET|ERR_PROXY/i.test(
+    String(error?.message || '')
+  )
+}
+
+function formatLoadError(error: any, url: string): string {
+  const message = String(error?.message || '')
+  if (/ERR_TIMED_OUT/i.test(message)) {
+    return `网页打开超时：${url}`
+  }
+  if (/ERR_NETWORK_CHANGED/i.test(message)) {
+    return `网络连接刚刚变化，网页没有打开成功：${url}`
+  }
+  if (/ERR_INTERNET|ERR_CONNECTION|ERR_PROXY/i.test(message)) {
+    return `网络连接不稳定，网页没有打开成功：${url}`
+  }
+  return message || `网页没有打开成功：${url}`
+}
+
+function clamp(n: number, min: number, max: number): number {
+  if (!Number.isFinite(n)) return min
+  return Math.min(max, Math.max(min, n))
+}
+
+async function waitForPageSettle(
+  webContents: Electron.WebContents,
+  extraDelay = 300
+): Promise<void> {
+  const startedAt = Date.now()
+  while (!webContents.isDestroyed() && webContents.isLoading() && Date.now() - startedAt < 10000) {
+    await sleep(100)
+  }
+  if (extraDelay > 0) {
+    await sleep(extraDelay)
+  }
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

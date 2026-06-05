@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import ChatSidebar from '../components/ChatSidebar.vue'
 import ChatMessages from '../components/ChatMessages.vue'
 import ChatInput from '../components/ChatInput.vue'
@@ -9,20 +9,60 @@ const activeId = ref(null)
 const messages = ref([])
 const loading = ref(false)
 const sidebarCollapsed = ref(false)
+const streamingContent = ref('')
+const ragCollections = ref([])
+const ragCollectionId = ref('all')
+const emit = defineEmits(['navigate'])
+
+// 流式监听器 cleanup
+let cleanupToken = null
+let cleanupDone = null
+let cleanupError = null
+
+function cleanupStreamListeners() {
+  cleanupToken?.()
+  cleanupDone?.()
+  cleanupError?.()
+  cleanupToken = cleanupDone = cleanupError = null
+}
+
+const openEntry = (view) => {
+  emit('navigate', view)
+}
 
 // 加载会话列表
 const loadConversations = async () => {
-  const result = await window.chat.getConversations()
-  if (result.success) {
-    conversations.value = result.data || []
+  try {
+    const result = await window.chat.getConversations()
+    if (result.success) {
+      conversations.value = result.data || []
+    }
+  } catch (e) {
+    console.error('[Chat] loadConversations 失败:', e)
+  }
+}
+
+// 加载资料夹
+const loadRagCollections = async () => {
+  try {
+    const result = await window.rag.collections()
+    if (result.success) {
+      ragCollections.value = result.data || []
+    }
+  } catch (e) {
+    console.error('[Chat] loadCollections 失败:', e)
   }
 }
 
 // 加载某个会话的消息
 const loadMessages = async (id) => {
-  const result = await window.chat.getConversation(id)
-  if (result.success && result.data) {
-    messages.value = result.data.messages || []
+  try {
+    const result = await window.chat.getConversation(id)
+    if (result.success && result.data) {
+      messages.value = result.data.messages || []
+    }
+  } catch (e) {
+    console.error('[Chat] loadMessages 失败:', e)
   }
 }
 
@@ -46,49 +86,118 @@ const selectConversation = async (id) => {
 const deleteConversation = async (id) => {
   try {
     await window.chat.deleteConversation(id)
-  } catch {}
-  conversations.value = conversations.value.filter(c => c.id !== id)
+  } catch (e) {
+    console.error('[Chat] deleteConversation 失败:', e)
+  }
+  conversations.value = conversations.value.filter((c) => c.id !== id)
   if (activeId.value === id) {
     activeId.value = null
     messages.value = []
   }
 }
 
-// 发送消息
+// 发送消息（流式）
 const sendMessage = async (text) => {
+  if (loading.value) return
   if (!activeId.value) {
-    await newConversation()
+    try {
+      await newConversation()
+    } catch (e) {
+      console.error('[Chat] newConversation 失败:', e)
+      return
+    }
   }
+
+  // 记录发送时的会话 ID，用于回调中校验
+  const sentConvId = activeId.value
+
+  // 立即显示用户消息
+  const userMsgId = 'u-' + Date.now()
+  messages.value.push({
+    id: userMsgId,
+    role: 'user',
+    content: text,
+    timestamp: Date.now()
+  })
 
   loading.value = true
+  streamingContent.value = ''
 
-  try {
-    const result = await window.chat.sendMessage(activeId.value, text)
-    if (result.success) {
-      // 从后端重新加载完整消息列表，避免重复
-      await loadMessages(activeId.value)
+  // 添加一个空的 AI 消息占位（流式填充）
+  const aiMsgId = 'ai-' + Date.now()
+  messages.value.push({
+    id: aiMsgId,
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now()
+  })
+
+  // 注册流式监听器
+  cleanupStreamListeners()
+
+  cleanupToken = window.chat.onStreamToken((token) => {
+    // 会话已切换，忽略旧流的 token
+    if (activeId.value !== sentConvId) return
+    streamingContent.value += token
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.id === aiMsgId) {
+      lastMsg.content = streamingContent.value
+    }
+  })
+
+  cleanupDone = window.chat.onStreamDone(async () => {
+    cleanupStreamListeners()
+    streamingContent.value = ''
+    // 会话已切换，只刷新侧边栏，不碰 messages
+    if (activeId.value !== sentConvId) {
       await loadConversations()
-    } else {
-      messages.value.push({
-        id: 'e-' + Date.now(),
-        role: 'assistant',
-        content: '抱歉，出现了错误：' + (result.error || '未知错误'),
-        timestamp: Date.now()
-      })
+      return
+    }
+    loading.value = false
+    await loadConversations()
+  })
+
+  cleanupError = window.chat.onStreamError((error) => {
+    cleanupStreamListeners()
+    streamingContent.value = ''
+    if (activeId.value !== sentConvId) return
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.id === aiMsgId) {
+      lastMsg.content = '抱歉，出现了错误：' + error
+    }
+    loading.value = false
+  })
+
+  // 调用 IPC（现在立即返回，不等待 LLM 完成）
+  try {
+    const result = await window.chat.sendMessage(sentConvId, text, {
+      collectionId: ragCollectionId.value
+    })
+    if (!result.success) {
+      cleanupStreamListeners()
+      if (activeId.value !== sentConvId) return
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.id === aiMsgId) {
+        lastMsg.content = '抱歉，出现了错误：' + (result.error || '未知错误')
+      }
+      loading.value = false
     }
   } catch (e) {
-    messages.value.push({
-      id: 'e-' + Date.now(),
-      role: 'assistant',
-      content: '请求失败：' + (e.message || '未知错误'),
-      timestamp: Date.now()
-    })
+    cleanupStreamListeners()
+    if (activeId.value !== sentConvId) return
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.id === aiMsgId) {
+      lastMsg.content = '请求失败：' + (e.message || '未知错误')
+    }
+    loading.value = false
   }
-
-  loading.value = false
 }
 
-onMounted(loadConversations)
+onMounted(() => {
+  loadConversations()
+  loadRagCollections()
+})
+onUnmounted(cleanupStreamListeners)
 </script>
 
 <template>
@@ -103,15 +212,31 @@ onMounted(loadConversations)
       @toggle="sidebarCollapsed = !sidebarCollapsed"
     />
     <div class="chat-area">
+      <div class="chat-toolbar">
+        <div class="source-picker">
+          <span class="source-icon">📚</span>
+          <span class="source-label">用哪些资料回答</span>
+          <select v-model="ragCollectionId" class="source-select" :disabled="loading">
+            <option value="all">全部资料</option>
+            <option value="off">不用资料</option>
+            <option
+              v-for="collection in ragCollections"
+              :key="collection.id"
+              :value="collection.id"
+            >
+              {{ collection.name }}资料（{{ collection.docCount }}）
+            </option>
+          </select>
+        </div>
+        <button class="entry-primary" @click="openEntry('knowledge')">导入资料</button>
+      </div>
       <ChatMessages
         :messages="messages"
         :loading="loading"
         @send="sendMessage"
+        @open-entry="openEntry"
       />
-      <ChatInput
-        :disabled="loading"
-        @send="sendMessage"
-      />
+      <ChatInput :disabled="loading" @send="sendMessage" />
     </div>
   </div>
 </template>
@@ -129,5 +254,83 @@ onMounted(loadConversations)
   flex-direction: column;
   min-width: 0;
   background: white;
+}
+
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #eee;
+  background: #fbfbfb;
+}
+
+.source-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.source-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #eef9e8;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.source-label {
+  font-size: 13px;
+  font-weight: 900;
+  color: #555;
+  white-space: nowrap;
+}
+
+.source-select {
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  padding: 6px 30px 6px 12px;
+  background: white;
+  color: #333;
+  font-size: 13px;
+  font-weight: 800;
+  outline: none;
+  max-width: 220px;
+}
+
+.source-select:focus {
+  border-color: var(--xm-green);
+}
+
+.entry-primary {
+  border: none;
+  border-radius: 999px;
+  background: var(--xm-green);
+  color: white;
+  box-shadow: 0 2px 0 var(--xm-green-dark);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.entry-primary:hover {
+  transform: translateY(-1px);
+  background: #61d60a;
+}
+
+@media (max-width: 760px) {
+  .chat-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

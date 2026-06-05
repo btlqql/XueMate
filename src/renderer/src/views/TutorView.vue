@@ -1,145 +1,35 @@
 <script setup>
-import { ref } from 'vue'
+import { useTutor } from '../composables/useTutor'
 
-const inputCode = ref('')
-const inputType = ref('code')
-const analyzing = ref(false)
-const results = ref(null)
-const error = ref('')
-
-// 作业批改相关
-const selectedFile = ref('')
-const checking = ref(false)
-const formatResult = ref(null)
-
-// 刷题相关
-const practiceTopic = ref('')
-const practiceProblems = ref([])
-const selectedProblem = ref(null)
-const practiceCode = ref('')
-const practiceLang = ref('Python')
-const judging = ref(false)
-const judgeResult = ref(null)
-const generatingProblems = ref(false)
-
-const sampleCode = `def bubble_sort(arr):
-    n = len(arr)
-    for i in range(n):
-        for j in range(0, n-i-1):
-            if arr[j] > arr[j+1]:
-                arr[j], arr[j+1] = arr[j+1], arr[j]
-    return arr
-
-print(bubble_sort([64, 34, 25, 12, 22, 11, 90]))`
-
-const loadSample = () => { inputCode.value = sampleCode }
-
-const analyze = async () => {
-  if (!inputCode.value.trim()) return
-  analyzing.value = true
-  error.value = ''
-  results.value = null
-
-  try {
-    const result = await window.llm.tutorCode(inputCode.value, inputType.value)
-    if (result.success) {
-      results.value = JSON.parse(result.data)
-    } else {
-      error.value = result.error || '请求失败'
-    }
-  } catch (e) {
-    error.value = '调用失败: ' + e.message
-  }
-  analyzing.value = false
-}
-
-const genProblems = async () => {
-  if (!practiceTopic.value.trim()) return
-  generatingProblems.value = true
-  error.value = ''
-  practiceProblems.value = []
-  selectedProblem.value = null
-  judgeResult.value = null
-
-  try {
-    const result = await window.llm.generateProblems(practiceTopic.value, 3)
-    if (result.success) {
-      practiceProblems.value = JSON.parse(result.data).problems
-    } else {
-      error.value = result.error || '生成失败'
-    }
-  } catch (e) {
-    error.value = '调用失败: ' + e.message
-  }
-  generatingProblems.value = false
-}
-
-const selectProblem = (p) => {
-  selectedProblem.value = p
-  practiceCode.value = ''
-  judgeResult.value = null
-}
-
-const submitCode = async () => {
-  if (!selectedProblem.value || !practiceCode.value.trim()) return
-  judging.value = true
-  judgeResult.value = null
-  error.value = ''
-
-  try {
-    const result = await window.llm.judgeCode(
-      selectedProblem.value.description,
-      practiceCode.value,
-      practiceLang.value
-    )
-    if (result.success) {
-      judgeResult.value = JSON.parse(result.data)
-    } else {
-      error.value = result.error || '判题失败'
-    }
-  } catch (e) {
-    error.value = '调用失败: ' + e.message
-  }
-  judging.value = false
-}
-
-const loadPracticeSample = () => {
-  practiceTopic.value = 'Python排序算法'
-}
-
-// 选择PDF文件
-const selectPDF = async () => {
-  error.value = ''
-  formatResult.value = null
-  try {
-    const result = await window.file.selectPDF()
-    if (result.success) {
-      selectedFile.value = result.data
-    }
-  } catch (e) {
-    error.value = '选择文件失败: ' + e.message
-  }
-}
-
-// 检查PDF格式
-const checkPDF = async () => {
-  if (!selectedFile.value) return
-  checking.value = true
-  error.value = ''
-  formatResult.value = null
-
-  try {
-    const result = await window.file.checkPDF(selectedFile.value)
-    if (result.success) {
-      formatResult.value = JSON.parse(result.data)
-    } else {
-      error.value = result.error || '检查失败'
-    }
-  } catch (e) {
-    error.value = '检查失败: ' + e.message
-  }
-  checking.value = false
-}
+const {
+  inputCode,
+  inputType,
+  analyzing,
+  results,
+  error,
+  selectedFile,
+  getFileName,
+  checking,
+  formatResult,
+  practiceTopic,
+  practiceProblems,
+  selectedProblem,
+  practiceCode,
+  practiceLang,
+  judging,
+  judgeResult,
+  generatingProblems,
+  loadSample,
+  switchTab,
+  backToProblemList,
+  analyze,
+  genProblems,
+  selectProblem,
+  submitCode,
+  loadPracticeSample,
+  selectPDF,
+  checkPDF
+} = useTutor()
 </script>
 
 <template>
@@ -152,9 +42,23 @@ const checkPDF = async () => {
     <div class="tutor-layout">
       <!-- Tab 切换 -->
       <div class="type-tabs">
-        <button class="tab" :class="{ active: inputType === 'code' }" @click="inputType = 'code'; results = null; error = ''">代码分析</button>
-        <button class="tab" :class="{ active: inputType === 'report' }" @click="inputType = 'report'; formatResult = null; error = ''">作业批改</button>
-        <button class="tab" :class="{ active: inputType === 'practice' }" @click="inputType = 'practice'; error = ''">刷题练习</button>
+        <button class="tab" :class="{ active: inputType === 'code' }" @click="switchTab('code')">
+          代码分析
+        </button>
+        <button
+          class="tab"
+          :class="{ active: inputType === 'report' }"
+          @click="switchTab('report')"
+        >
+          作业批改
+        </button>
+        <button
+          class="tab"
+          :class="{ active: inputType === 'practice' }"
+          @click="switchTab('practice')"
+        >
+          刷题练习
+        </button>
       </div>
 
       <!-- 代码分析 -->
@@ -218,12 +122,14 @@ const checkPDF = async () => {
           <div class="upload-area" @click="selectPDF" :class="{ 'has-file': selectedFile }">
             <div class="upload-icon">
               <svg viewBox="0 0 24 24" width="48" height="48" fill="#aaa">
-                <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM6 20V4h5v7h7v9H6z"/>
-                <path d="M8 15h8v2H8zm0-3h8v2H8z"/>
+                <path
+                  d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM6 20V4h5v7h7v9H6z"
+                />
+                <path d="M8 15h8v2H8zm0-3h8v2H8z" />
               </svg>
             </div>
             <p class="upload-text" v-if="!selectedFile">点击选择 PDF 作业文件</p>
-            <p class="upload-text file-name" v-else>{{ selectedFile.split('/').pop() }}</p>
+            <p class="upload-text file-name" v-else>{{ getFileName(selectedFile) }}</p>
           </div>
           <div class="button-group">
             <button class="btn btn-primary" @click="checkPDF" :disabled="!selectedFile || checking">
@@ -259,7 +165,16 @@ const checkPDF = async () => {
           </div>
 
           <!-- 格式分 -->
-          <div class="score-bar" :class="formatResult.formatCheck.score >= 80 ? 'score-good' : formatResult.formatCheck.score >= 60 ? 'score-ok' : 'score-bad'">
+          <div
+            class="score-bar"
+            :class="
+              formatResult.formatCheck.score >= 80
+                ? 'score-good'
+                : formatResult.formatCheck.score >= 60
+                  ? 'score-ok'
+                  : 'score-bad'
+            "
+          >
             <span class="score-text">格式规范分</span>
             <span class="score-num">{{ formatResult.formatCheck.score }}</span>
           </div>
@@ -296,7 +211,11 @@ const checkPDF = async () => {
         <div class="card">
           <h2 class="section-title">选择题目方向</h2>
           <div class="input-bar">
-            <input v-model="practiceTopic" class="input" placeholder="如：Python排序算法、链表、二叉树..." />
+            <input
+              v-model="practiceTopic"
+              class="input"
+              placeholder="如：Python排序算法、链表、二叉树..."
+            />
             <button class="btn btn-primary" @click="genProblems" :disabled="generatingProblems">
               {{ generatingProblems ? '生成中...' : '生成题目' }}
             </button>
@@ -325,7 +244,16 @@ const checkPDF = async () => {
             >
               <div class="problem-top">
                 <span class="problem-title">{{ p.title }}</span>
-                <span :class="['tag', p.difficulty === '简单' ? 'tag-green' : p.difficulty === '中等' ? 'tag-yellow' : 'tag-red']">
+                <span
+                  :class="[
+                    'tag',
+                    p.difficulty === '简单'
+                      ? 'tag-green'
+                      : p.difficulty === '中等'
+                        ? 'tag-yellow'
+                        : 'tag-red'
+                  ]"
+                >
                   {{ p.difficulty }}
                 </span>
               </div>
@@ -337,8 +265,17 @@ const checkPDF = async () => {
         <!-- 答题区 -->
         <div class="card" v-if="selectedProblem">
           <div class="problem-header-bar">
-            <button class="btn btn-outline btn-sm" @click="selectedProblem = null; judgeResult = null">返回题目列表</button>
-            <span :class="['tag', selectedProblem.difficulty === '简单' ? 'tag-green' : selectedProblem.difficulty === '中等' ? 'tag-yellow' : 'tag-red']">
+            <button class="btn btn-outline btn-sm" @click="backToProblemList">返回题目列表</button>
+            <span
+              :class="[
+                'tag',
+                selectedProblem.difficulty === '简单'
+                  ? 'tag-green'
+                  : selectedProblem.difficulty === '中等'
+                    ? 'tag-yellow'
+                    : 'tag-red'
+              ]"
+            >
               {{ selectedProblem.difficulty }}
             </span>
           </div>
@@ -371,8 +308,19 @@ const checkPDF = async () => {
         <!-- 判题结果 -->
         <div class="card" v-if="judgeResult">
           <h2 class="section-title">判题结果</h2>
-          <div class="verdict-bar" :class="judgeResult.verdict === '正确' ? 'verdict-pass' : judgeResult.verdict === '部分正确' ? 'verdict-partial' : 'verdict-fail'">
-            <span class="verdict-icon">{{ judgeResult.verdict === '正确' ? '✓' : judgeResult.verdict === '部分正确' ? '◐' : '✗' }}</span>
+          <div
+            class="verdict-bar"
+            :class="
+              judgeResult.verdict === '正确'
+                ? 'verdict-pass'
+                : judgeResult.verdict === '部分正确'
+                  ? 'verdict-partial'
+                  : 'verdict-fail'
+            "
+          >
+            <span class="verdict-icon">{{
+              judgeResult.verdict === '正确' ? '✓' : judgeResult.verdict === '部分正确' ? '◐' : '✗'
+            }}</span>
             <span class="verdict-text">{{ judgeResult.verdict }}</span>
             <span class="verdict-score">{{ judgeResult.score }}分</span>
           </div>
@@ -385,7 +333,9 @@ const checkPDF = async () => {
           <div class="result-block" v-if="judgeResult.errors && judgeResult.errors.length > 0">
             <h3 class="result-label">错误分析</h3>
             <div class="tips-list">
-              <div v-for="(err, i) in judgeResult.errors" :key="i" class="tip-item error-tip">{{ err }}</div>
+              <div v-for="(err, i) in judgeResult.errors" :key="i" class="tip-item error-tip">
+                {{ err }}
+              </div>
             </div>
           </div>
 
@@ -453,7 +403,9 @@ const checkPDF = async () => {
   display: flex;
   gap: 8px;
 }
-.input-bar .input { flex: 1; }
+.input-bar .input {
+  flex: 1;
+}
 
 .lang-select {
   padding: 6px 14px;
@@ -528,7 +480,9 @@ const checkPDF = async () => {
   font-weight: 600;
 }
 
-.problem-full-desc p { margin-bottom: 10px; }
+.problem-full-desc p {
+  margin-bottom: 10px;
+}
 
 .problem-example {
   margin-top: 10px;
@@ -577,9 +531,15 @@ const checkPDF = async () => {
   color: #991b1b;
 }
 
-.verdict-icon { font-size: 24px; }
-.verdict-text { flex: 1; }
-.verdict-score { font-size: 16px; }
+.verdict-icon {
+  font-size: 24px;
+}
+.verdict-text {
+  flex: 1;
+}
+.verdict-score {
+  font-size: 16px;
+}
 
 .output-block {
   padding: 12px;
@@ -591,8 +551,12 @@ const checkPDF = async () => {
 }
 
 /* 通用结果块 */
-.result-block { margin-bottom: 20px; }
-.result-block:last-of-type { margin-bottom: 0; }
+.result-block {
+  margin-bottom: 20px;
+}
+.result-block:last-of-type {
+  margin-bottom: 0;
+}
 
 .result-label {
   font-size: 14px;
@@ -623,9 +587,19 @@ const checkPDF = async () => {
   margin-bottom: 6px;
 }
 
-.error-line { font-size: 13px; color: #777; }
-.error-text { font-weight: 700; font-size: 16px; }
-.error-hint { margin-top: 6px; color: #777; font-size: 14px; }
+.error-line {
+  font-size: 13px;
+  color: #777;
+}
+.error-text {
+  font-weight: 700;
+  font-size: 16px;
+}
+.error-hint {
+  margin-top: 6px;
+  color: #777;
+  font-size: 14px;
+}
 
 .suggestion-list {
   list-style: none;
@@ -707,8 +681,13 @@ const checkPDF = async () => {
   background: #f0fdf4;
 }
 
-.upload-icon { margin-bottom: 10px; opacity: 0.6; }
-.upload-area:hover .upload-icon { opacity: 1; }
+.upload-icon {
+  margin-bottom: 10px;
+  opacity: 0.6;
+}
+.upload-area:hover .upload-icon {
+  opacity: 1;
+}
 
 .upload-text {
   font-weight: 700;
@@ -762,11 +741,22 @@ const checkPDF = async () => {
   font-size: 16px;
 }
 
-.score-good { background: #dcfce7; color: #166534; }
-.score-ok { background: #fef9c3; color: #854d0e; }
-.score-bad { background: #fee2e2; color: #991b1b; }
+.score-good {
+  background: #dcfce7;
+  color: #166534;
+}
+.score-ok {
+  background: #fef9c3;
+  color: #854d0e;
+}
+.score-bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
 
-.score-num { font-size: 28px; }
+.score-num {
+  font-size: 28px;
+}
 
 .check-list {
   display: flex;
