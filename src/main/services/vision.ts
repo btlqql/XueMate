@@ -3,14 +3,14 @@ import { net } from 'electron'
 // 推荐环境变量：
 // VISION_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
 // VISION_API_KEY=你的多模态模型 key
-// VISION_MODEL=gemini-1.5-flash 或 qwen-vl-plus
-// VISION_FALLBACK_MODELS=gemini-1.5-pro,qwen-vl-plus
+// VISION_MODEL=gemini-2.5-flash-lite 或 qwen-vl-plus
+// VISION_FALLBACK_MODELS=gemini-2.5-flash,qwen-vl-plus
 
 const VISION_API_KEY = process.env.VISION_API_KEY || process.env.GEMINI_API_KEY || ''
 const VISION_BASE_URL =
   process.env.VISION_BASE_URL ||
   'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-const VISION_MODEL = process.env.VISION_MODEL || 'gemini-1.5-flash'
+const VISION_MODEL = process.env.VISION_MODEL || 'gemini-2.5-flash-lite'
 const VISION_FALLBACK_MODELS = process.env.VISION_FALLBACK_MODELS || ''
 
 export interface VisionJsonOptions {
@@ -145,7 +145,7 @@ async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T
 
 function buildModelList(primaryModel: string): string[] {
   const defaults = isGoogleVisionEndpoint()
-    ? ['gemini-1.5-flash']
+    ? ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
     : []
   const configuredFallbacks = VISION_FALLBACK_MODELS.split(',')
     .map((item) => item.trim())

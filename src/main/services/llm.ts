@@ -12,8 +12,8 @@ interface ChatOptions {
 
 const API_KEY = process.env.DEEPSEEK_API_KEY || ''
 const BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1/chat/completions'
-const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
-const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-reasoner'
+const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
 
 export { MODEL, PRO_MODEL }
 
@@ -40,6 +40,7 @@ export async function chat(options: ChatOptions & { timeoutMs?: number }): Promi
       max_tokens: maxTokens,
       temperature
     }
+    applyDeepSeekOptions(body, useModel)
 
     try {
       const response = await fetch(BASE_URL, {
@@ -105,6 +106,7 @@ export async function chatStream(
     stream: true,
     temperature
   }
+  applyDeepSeekOptions(body, useModel)
 
   try {
     const response = await fetch(BASE_URL, {
@@ -169,6 +171,19 @@ export async function chatStream(
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function applyDeepSeekOptions(body: Record<string, any>, model: string): void {
+  if (!isDeepSeekEndpoint() || !/^deepseek-v4-/i.test(model)) return
+  body.thinking = { type: 'disabled' }
+}
+
+function isDeepSeekEndpoint(): boolean {
+  try {
+    return /(^|\.)deepseek\.com/i.test(new URL(BASE_URL).hostname)
+  } catch {
+    return /deepseek\.com/i.test(BASE_URL)
+  }
 }
 
 // 任务解析
