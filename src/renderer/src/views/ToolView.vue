@@ -53,7 +53,9 @@ const activeComponent = computed(
     </div>
 
     <div class="tool-panel">
-      <component :is="activeComponent" />
+      <KeepAlive>
+        <component :is="activeComponent" />
+      </KeepAlive>
     </div>
   </div>
 </template>
@@ -76,29 +78,30 @@ const activeComponent = computed(
   align-items: flex-start;
   gap: 4px;
   padding: 14px 16px;
-  border: 2px solid #e5e5e5;
-  border-radius: 14px;
-  background: white;
-  color: #555;
+  border: 2px solid var(--xm-border);
+  border-radius: var(--xm-radius-lg);
+  background: var(--xm-surface);
+  color: var(--xm-text-light);
   cursor: pointer;
   text-align: left;
   transition: all 0.15s;
 }
 
 .tool-tab:hover {
-  border-color: #cfcfcf;
+  border-color: var(--xm-border-strong);
   transform: translateY(-1px);
 }
 
 .tool-tab.active {
   border-color: var(--xm-green);
-  box-shadow: 0 0 0 4px rgba(88, 204, 2, 0.12);
+  background: #f0fdf4;
+  box-shadow: 0 3px 0 #d9f6cc;
 }
 
 .tool-label {
   font-size: 16px;
-  font-weight: 800;
-  color: #333;
+  font-weight: 900;
+  color: var(--xm-text);
 }
 
 .tool-tab.active .tool-label {
@@ -108,7 +111,7 @@ const activeComponent = computed(
 .tool-desc {
   font-size: 12px;
   font-weight: 600;
-  color: #999;
+  color: var(--xm-text-muted);
   line-height: 1.4;
 }
 

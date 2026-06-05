@@ -14,12 +14,28 @@
   --xm-purple: #ce82ff;
   --xm-bg: #ffffff;
   --xm-bg-soft: #f7f7f7;
+  --xm-surface: #ffffff;
+  --xm-surface-soft: #f7f7f7;
+  --xm-surface-muted: #f3f4f6;
   --xm-text: #3c3c3c;
   --xm-text-light: #777777;
+  --xm-text-muted: #8a8a8a;
   --xm-border: #e5e5e5;
+  --xm-border-strong: #cfcfcf;
+  --xm-danger-bg: #fee2e2;
+  --xm-danger-text: #991b1b;
+  --xm-success-bg: #dcfce7;
+  --xm-success-text: #166534;
+  --xm-warning-bg: #fef9c3;
+  --xm-warning-text: #854d0e;
+  --xm-info-bg: #dbeafe;
+  --xm-info-text: #1d4ed8;
   --xm-radius: 12px;
   --xm-radius-sm: 8px;
-  --xm-font: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+  --xm-radius-lg: 16px;
+  --xm-radius-pill: 999px;
+  --xm-font: 'Nunito', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+  --xm-font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
   --xm-sidebar-w: 220px;
 }
 
@@ -29,7 +45,7 @@ body {
   font-family: var(--xm-font);
   font-size: 17px;
   font-weight: 500;
-  line-height: 20px;
+  line-height: 1.5;
   color: var(--xm-text);
   background: var(--xm-bg);
   -webkit-font-smoothing: antialiased;
@@ -347,6 +363,100 @@ body {
 .tag-yellow { background: #fef9c3; color: #854d0e; }
 .tag-red { background: #fee2e2; color: #991b1b; }
 .tag-blue { background: var(--xm-blue-light); color: #0c4a6e; }
+
+
+
+/* Shared UI primitives */
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.input-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-bar .input {
+  flex: 1;
+}
+
+.chip,
+.sample-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--xm-border);
+  background: var(--xm-surface);
+  border-radius: var(--xm-radius-pill);
+  padding: 7px 12px;
+  color: var(--xm-text-light);
+  font-weight: 800;
+  font-size: 12px;
+  font-family: var(--xm-font);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip:hover,
+.sample-chip:hover {
+  border-color: var(--xm-green);
+  color: var(--xm-green-dark);
+  background: #f0fdf4;
+}
+
+.panel-tab,
+.tool-tab,
+.mode-tab {
+  border-color: var(--xm-border);
+  border-radius: var(--xm-radius-lg);
+  background: var(--xm-surface);
+  color: var(--xm-text-light);
+  transition: all 0.15s ease;
+}
+
+.panel-tab.active,
+.tool-tab.active,
+.mode-tab.active {
+  border-color: var(--xm-green);
+  background: #f0fdf4;
+  box-shadow: 0 3px 0 #d9f6cc;
+}
+
+.error-msg {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--xm-radius-sm);
+  background: var(--xm-danger-bg);
+  color: var(--xm-danger-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.result-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  color: var(--xm-text);
+}
+
+.empty-state {
+  color: var(--xm-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.code-font,
+code,
+pre {
+  font-family: var(--xm-font-mono);
+}
 
 /* Animations */
 @keyframes fadeUp {
