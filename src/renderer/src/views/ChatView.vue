@@ -84,6 +84,7 @@ const selectConversation = async (id) => {
 
 // 删除会话
 const deleteConversation = async (id) => {
+  const deletingActiveStream = activeId.value === id && loading.value
   try {
     await window.chat.deleteConversation(id)
   } catch (e) {
@@ -91,6 +92,11 @@ const deleteConversation = async (id) => {
   }
   conversations.value = conversations.value.filter((c) => c.id !== id)
   if (activeId.value === id) {
+    if (deletingActiveStream) {
+      cleanupStreamListeners()
+      loading.value = false
+      streamingContent.value = ''
+    }
     activeId.value = null
     messages.value = []
   }
@@ -148,24 +154,24 @@ const sendMessage = async (text) => {
   cleanupDone = window.chat.onStreamDone(async () => {
     cleanupStreamListeners()
     streamingContent.value = ''
+    loading.value = false
     // 会话已切换，只刷新侧边栏，不碰 messages
     if (activeId.value !== sentConvId) {
       await loadConversations()
       return
     }
-    loading.value = false
     await loadConversations()
   })
 
   cleanupError = window.chat.onStreamError((error) => {
     cleanupStreamListeners()
     streamingContent.value = ''
+    loading.value = false
     if (activeId.value !== sentConvId) return
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg && lastMsg.id === aiMsgId) {
       lastMsg.content = '抱歉，出现了错误：' + error
     }
-    loading.value = false
   })
 
   // 调用 IPC（现在立即返回，不等待 LLM 完成）
@@ -175,21 +181,23 @@ const sendMessage = async (text) => {
     })
     if (!result.success) {
       cleanupStreamListeners()
+      loading.value = false
+      streamingContent.value = ''
       if (activeId.value !== sentConvId) return
       const lastMsg = messages.value[messages.value.length - 1]
       if (lastMsg && lastMsg.id === aiMsgId) {
         lastMsg.content = '抱歉，出现了错误：' + (result.error || '未知错误')
       }
-      loading.value = false
     }
   } catch (e) {
     cleanupStreamListeners()
+    loading.value = false
+    streamingContent.value = ''
     if (activeId.value !== sentConvId) return
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg && lastMsg.id === aiMsgId) {
       lastMsg.content = '请求失败：' + (e.message || '未知错误')
     }
-    loading.value = false
   }
 }
 
