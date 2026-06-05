@@ -80,8 +80,9 @@ ${conversationText}
         if (['easy', 'medium', 'hard'].includes(parsed.preferences.difficulty)) {
           updated.preferences.difficulty = parsed.preferences.difficulty
         }
-        if (['zh', 'en'].includes(parsed.preferences.language)) {
-          updated.preferences.language = parsed.preferences.language
+        const language = normalizeExtractedLanguage(parsed.preferences.language)
+        if (language) {
+          updated.preferences.language = language
         }
       }
 
@@ -137,4 +138,12 @@ ${conversationText}
     console.error('[Memory] 提取失败:', e)
   }
   return currentMemory
+}
+
+function normalizeExtractedLanguage(value: unknown): string {
+  const label = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 24)
+  if (!label) return ''
+  if (/^(zh|cn|中文|汉语|普通话)$/i.test(label)) return 'zh'
+  if (/^(en|eng|english|英文|英语)$/i.test(label)) return 'en'
+  return label
 }

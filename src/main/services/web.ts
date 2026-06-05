@@ -1,4 +1,4 @@
-import { BrowserView, BrowserWindow } from 'electron'
+import { BrowserView, BrowserWindow, net } from 'electron'
 
 interface PageResult {
   url: string
@@ -215,52 +215,216 @@ export async function openBrowserUrl(url: string, throwOnFailure = false): Promi
 export async function fetchPage(url: string): Promise<PageResult> {
   console.log('[Web] fetchPage:', url)
   const win = getOrCreateBrowserWindow()
+  const normalizedUrl = normalizeUrl(url)
 
   try {
-    await win.loadURL(normalizeUrl(url))
+    await win.loadURL(normalizedUrl)
+    await waitForPageSettle(win.webContents, 800)
   } catch (err: any) {
     console.error('[Web] loadURL 失败:', err.message)
   }
 
-  // 每次导航后清理缓存，防止内存累积
+  await sleep(600)
+
   try {
-    win.webContents.session.clearCache()
-  } catch {
-    /* ignore */
+    const data = await extractPageFromRenderer(win.webContents)
+    // 每次提取成功后清理缓存，防止内存累积；不要在 executeJavaScript 前清。
+    clearSessionCacheSoon(win.webContents)
+    return data
+  } catch (err: any) {
+    console.error('[Web] renderer 提取网页失败，改用 net.fetch 兜底:', err.message)
+    clearSessionCacheSoon(win.webContents)
+    return fetchPageWithNet(normalizedUrl)
   }
+}
 
-  await sleep(1500)
+async function extractPageFromRenderer(webContents: Electron.WebContents): Promise<PageResult> {
+  const data = await webContents.executeJavaScript(
+    `
+    (() => {
+      function clean(value, max = 8000) {
+        return String(value || '')
+          .replace(/\\n{3,}/g, '\\n\\n')
+          .replace(/\\s+/g, ' ')
+          .trim()
+          .slice(0, max)
+      }
 
-  const data = await win.webContents.executeJavaScript(`
-    (function() {
-      const clone = document.body.cloneNode(true)
-      clone.querySelectorAll('script, style, noscript, svg, nav, footer, header').forEach(el => el.remove())
+      try {
+        const root = document.body || document.documentElement
+        if (!root) {
+          return {
+            url: location.href,
+            title: document.title || '',
+            text: '',
+            links: []
+          }
+        }
 
-      const text = clone.innerText
-        .replace(/\n{3,}/g, '\n\n')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 8000)
+        const clone = root.cloneNode(true)
+        if (clone.querySelectorAll) {
+          clone
+            .querySelectorAll('script, style, noscript, svg, nav, footer, header, iframe')
+            .forEach((el) => el.remove())
+        }
 
-      const links = Array.from(document.querySelectorAll('a[href]'))
-        .filter(a => a.href.startsWith('http') && !a.href.includes('javascript:'))
-        .slice(0, 30)
-        .map(a => ({
-          text: a.innerText.trim().slice(0, 100),
-          href: a.href
-        }))
-        .filter(l => l.text.length > 0)
+        const text = clean(clone.innerText || clone.textContent || '')
+        const links = []
+        document.querySelectorAll('a[href]').forEach((a) => {
+          try {
+            const href = String(a.href || '')
+            if (!href.startsWith('http') || href.startsWith('javascript:')) return
+            const label = clean(a.innerText || a.textContent || a.getAttribute('aria-label') || href, 100)
+            if (!label) return
+            links.push({ text: label, href })
+          } catch {
+            // 跳过单个异常链接，不能让整页提取失败
+          }
+        })
 
-      return {
-        url: location.href,
-        title: document.title,
-        text,
-        links
+        return {
+          url: location.href,
+          title: document.title || '',
+          text,
+          links: links.slice(0, 30)
+        }
+      } catch (error) {
+        return {
+          url: location.href,
+          title: document.title || '',
+          text: '',
+          links: [],
+          extractionError: String(error && error.message ? error.message : error)
+        }
       }
     })()
-  `)
+  `,
+    true
+  )
 
-  return data
+  if (!data || typeof data !== 'object') {
+    throw new Error('网页提取结果为空')
+  }
+
+  return {
+    url: String(data.url || webContents.getURL()),
+    title: String(data.title || webContents.getTitle()),
+    text: String(data.text || ''),
+    links: Array.isArray(data.links)
+      ? data.links
+          .map((link: any) => ({
+            text: String(link?.text || '').trim().slice(0, 100),
+            href: String(link?.href || '').trim()
+          }))
+          .filter((link) => link.text && /^https?:\/\//i.test(link.href))
+          .slice(0, 30)
+      : []
+  }
+}
+
+async function fetchPageWithNet(url: string): Promise<PageResult> {
+  const normalizedUrl = normalizeUrl(url)
+  const response = await net.fetch(normalizedUrl, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.7'
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error(`网页请求失败 (${response.status})`)
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  if (!/text|html|xml|json/i.test(contentType)) {
+    return {
+      url: response.url || normalizedUrl,
+      title: '网页',
+      text: `这个网页不是普通文字页面（${contentType || '未知类型'}），暂时无法直接提取。`,
+      links: []
+    }
+  }
+
+  const html = await response.text()
+  return extractPageFromHtml(html, response.url || normalizedUrl)
+}
+
+function extractPageFromHtml(html: string, pageUrl: string): PageResult {
+  const withoutNoisyBlocks = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<(nav|footer|header|iframe)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+
+  const title = decodeHtmlEntity(
+    (withoutNoisyBlocks.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').trim()
+  )
+
+  const links: { text: string; href: string }[] = []
+  const anchorRegex = /<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi
+  let anchorMatch: RegExpExecArray | null
+  while ((anchorMatch = anchorRegex.exec(withoutNoisyBlocks)) && links.length < 30) {
+    const rawHref = decodeHtmlEntity(anchorMatch[2]).trim()
+    const href = resolveHref(rawHref, pageUrl)
+    if (!href || !/^https?:\/\//i.test(href)) continue
+    const text = htmlToText(anchorMatch[3], 100)
+    if (!text || /^(http|www\.)/i.test(text)) continue
+    links.push({ text, href })
+  }
+
+  const text = htmlToText(withoutNoisyBlocks, 8000)
+
+  return {
+    url: pageUrl,
+    title: title || '网页',
+    text,
+    links
+  }
+}
+
+function htmlToText(html: string, max: number): string {
+  return decodeHtmlEntity(
+    html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  )
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max)
+}
+
+function decodeHtmlEntity(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\\d+);/g, (_match, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) => String.fromCharCode(parseInt(code, 16)))
+}
+
+function resolveHref(href: string, pageUrl: string): string {
+  if (!href || href.startsWith('javascript:') || href.startsWith('#')) return ''
+  try {
+    return new URL(href, pageUrl).href
+  } catch {
+    return ''
+  }
+}
+
+function clearSessionCacheSoon(webContents: Electron.WebContents): void {
+  setTimeout(() => {
+    webContents.session.clearCache().catch(() => {
+      /* ignore */
+    })
+  }, 1000)
 }
 
 // 截图

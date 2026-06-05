@@ -126,7 +126,27 @@ interface QuickSearchAPI {
     data?: {
       query: string
       summary: string
-      sources: { title: string; url: string; text: string }[]
+      mode?: 'cloud' | 'local'
+      taskId?: string
+      elapsedMs?: number
+      cacheHit?: boolean
+      stages?: { name: string; status: string; detail: string; at: string }[]
+      sources: {
+        title: string
+        url: string
+        text: string
+        level?: string
+        scores?: {
+          relevance: number
+          readability: number
+          ageFit: number
+          trust: number
+          adNoise: number
+          overall: number
+          level: string
+          reason: string
+        }
+      }[]
     }
     error?: string
   }>

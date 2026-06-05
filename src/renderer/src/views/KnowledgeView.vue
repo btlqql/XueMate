@@ -6,6 +6,9 @@ const {
   collections,
   activeCollectionId,
   activeCollection,
+  activeGraphId,
+  activeGraphScope,
+  graphScopes,
   documents,
   stats,
   graphData,
@@ -17,6 +20,7 @@ const {
   newCollectionName,
   loadGraph,
   setActiveCollection,
+  setActiveGraph,
   createCollection,
   selectAndImport,
   deleteDoc
@@ -86,7 +90,11 @@ const {
       :graph-data="graphData"
       :loading="graphLoading"
       :error="graphError"
+      :scopes="graphScopes"
+      :active-scope-id="activeGraphId"
+      :scope-name="activeGraphScope?.name || '全部图谱'"
       @refresh="loadGraph"
+      @scope-change="setActiveGraph"
     />
 
     <!-- 导入按钮 -->

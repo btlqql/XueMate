@@ -1,0 +1,367 @@
+{
+  "generatedAt": "2026-05-29T08:37:05.436Z",
+  "corpus": {
+    "chunkCount": 17,
+    "totalChars": 758
+  },
+  "baseline": {
+    "name": "baseline_dense_top3",
+    "queryCount": 10,
+    "selectedChunks": 3,
+    "hitAtK": 1,
+    "recallAtK": 0.9333333333333332,
+    "precisionAtK": 0.4666666666666666,
+    "wasteAtK": 0.5333333333333333,
+    "mrr": 0.95,
+    "ndcgAtK": 0.8939650057890589,
+    "duplicateChunksPerQuery": 0.9,
+    "avgContextChars": 130,
+    "p50LatencyMs": 0.05288330000000023,
+    "rows": [
+      {
+        "selected": [
+          "math-fraction-dup",
+          "math-decimal-1",
+          "math-geometry-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 0,
+        "recall": 0.3333333333333333,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 0.46927872602275644,
+        "contextChars": 114
+      },
+      {
+        "selected": [
+          "math-fraction-dup",
+          "math-geometry-1",
+          "math-fraction-2"
+        ],
+        "relevantSelected": 2,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.6666666666666666,
+        "waste": 0.3333333333333333,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 0.9197207891481876,
+        "contextChars": 120
+      },
+      {
+        "selected": [
+          "english-words-2",
+          "english-words-1",
+          "english-words-dup"
+        ],
+        "relevantSelected": 3,
+        "duplicateDocs": 2,
+        "recall": 1,
+        "precision": 1,
+        "waste": 0,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 136
+      },
+      {
+        "selected": [
+          "english-words-1",
+          "english-grammar-1",
+          "english-words-dup"
+        ],
+        "relevantSelected": 2,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.6666666666666666,
+        "waste": 0.3333333333333333,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 0.9197207891481876,
+        "contextChars": 140
+      },
+      {
+        "selected": [
+          "science-filter-1",
+          "science-plant-1",
+          "science-magnet-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 121
+      },
+      {
+        "selected": [
+          "science-plant-1",
+          "science-filter-1",
+          "writing-report-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 128
+      },
+      {
+        "selected": [
+          "task-format-2",
+          "task-format-1",
+          "math-fraction-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 0.5,
+        "ndcg": 0.6309297535714575,
+        "contextChars": 150
+      },
+      {
+        "selected": [
+          "task-format-2",
+          "task-format-1",
+          "science-magnet-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 127
+      },
+      {
+        "selected": [
+          "coding-list-1",
+          "coding-loop-1",
+          "science-magnet-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 137
+      },
+      {
+        "selected": [
+          "writing-report-1",
+          "math-decimal-1",
+          "english-words-2"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 0,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 127
+      }
+    ]
+  },
+  "hybrid": {
+    "name": "hybrid_dense_lexical_mmr_top3",
+    "queryCount": 10,
+    "selectedChunks": 3,
+    "hitAtK": 1,
+    "recallAtK": 0.9666666666666666,
+    "precisionAtK": 0.4999999999999999,
+    "wasteAtK": 0.5,
+    "mrr": 1,
+    "ndcgAtK": 0.9703918089034135,
+    "duplicateChunksPerQuery": 1,
+    "avgContextChars": 135.4,
+    "p50LatencyMs": 0.9304875000000002,
+    "rows": [
+      {
+        "selected": [
+          "math-fraction-dup",
+          "math-decimal-1",
+          "math-fraction-1"
+        ],
+        "relevantSelected": 2,
+        "duplicateDocs": 1,
+        "recall": 0.6666666666666666,
+        "precision": 0.6666666666666666,
+        "waste": 0.3333333333333333,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 0.7039180890341347,
+        "contextChars": 137
+      },
+      {
+        "selected": [
+          "math-fraction-2",
+          "math-fraction-dup",
+          "math-geometry-1"
+        ],
+        "relevantSelected": 2,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.6666666666666666,
+        "waste": 0.3333333333333333,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 120
+      },
+      {
+        "selected": [
+          "english-words-2",
+          "english-words-1",
+          "english-words-dup"
+        ],
+        "relevantSelected": 3,
+        "duplicateDocs": 2,
+        "recall": 1,
+        "precision": 1,
+        "waste": 0,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 136
+      },
+      {
+        "selected": [
+          "english-words-1",
+          "english-words-dup",
+          "english-grammar-1"
+        ],
+        "relevantSelected": 2,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.6666666666666666,
+        "waste": 0.3333333333333333,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 140
+      },
+      {
+        "selected": [
+          "science-filter-1",
+          "science-plant-1",
+          "science-magnet-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 121
+      },
+      {
+        "selected": [
+          "science-plant-1",
+          "science-filter-1",
+          "writing-report-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 128
+      },
+      {
+        "selected": [
+          "task-format-1",
+          "task-format-2",
+          "math-fraction-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 150
+      },
+      {
+        "selected": [
+          "task-format-2",
+          "task-format-1",
+          "science-magnet-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 127
+      },
+      {
+        "selected": [
+          "coding-list-1",
+          "coding-loop-1",
+          "math-fraction-1"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 1,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 160
+      },
+      {
+        "selected": [
+          "writing-report-1",
+          "science-plant-1",
+          "english-words-2"
+        ],
+        "relevantSelected": 1,
+        "duplicateDocs": 0,
+        "recall": 1,
+        "precision": 0.3333333333333333,
+        "waste": 0.6666666666666666,
+        "hit": 1,
+        "mrr": 1,
+        "ndcg": 1,
+        "contextChars": 135
+      }
+    ]
+  },
+  "improvement": {
+    "recallLiftPct": 3.571428571428571,
+    "precisionLiftPct": 7.14285714285713,
+    "ndcgLiftPct": 8.549194053395457,
+    "duplicateReductionPct": -11.111111111111107,
+    "contextWasteReductionPct": 6.249999999999998,
+    "contextCompressionVsFullCorpusPct": 82.13720316622691
+  }
+}

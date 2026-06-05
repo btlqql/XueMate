@@ -1,13 +1,17 @@
 <script setup>
+import { computed } from 'vue'
 import { useKnowledgeGraphRenderer } from '../composables/useKnowledgeGraphRenderer'
 
 const props = defineProps({
   graphData: { type: Object, default: null },
   loading: { type: Boolean, default: false },
-  error: { type: String, default: '' }
+  error: { type: String, default: '' },
+  scopes: { type: Array, default: () => [] },
+  activeScopeId: { type: String, default: 'all' },
+  scopeName: { type: String, default: '全部图谱' }
 })
 
-const emit = defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'scope-change'])
 
 const {
   container,
@@ -22,11 +26,30 @@ const {
   hasGraph,
   graphStatusText,
   legendItems,
+  searchPlaceholder,
   searchNode,
+  selectNode,
   fitGraph,
   formatPercent,
   formatDate
 } = useKnowledgeGraphRenderer(props)
+
+const selectedScopeId = computed(() => {
+  if (!selectedNode.value) return ''
+  return selectedNode.value.meta?.collectionId || ''
+})
+
+const canOpenSelectedScope = computed(
+  () => selectedScopeId.value && selectedScopeId.value !== props.activeScopeId
+)
+
+const selectedScopeButtonText = computed(() =>
+  selectedNode.value?.type === 'collection' ? '进入这个图谱' : '查看所在图谱'
+)
+
+function changeScope(scopeId) {
+  emit('scope-change', scopeId || 'all')
+}
 </script>
 
 <template>
@@ -34,8 +57,8 @@ const {
     <div class="graph-header">
       <div>
         <div class="eyebrow">学习图谱 · Sigma.js</div>
-        <h2 class="section-title">学习网络</h2>
-        <p class="graph-desc">把资料、知识点、学习画像和复习任务连起来，形成自己的学习地图。</p>
+        <h2 class="section-title">学习网络 · {{ scopeName }}</h2>
+        <p class="graph-desc">把资料、知识点、学习画像和复习任务连起来；可以进入单个图谱，也可以回到全部图谱。</p>
         <p class="graph-status">{{ graphStatusText }}</p>
       </div>
       <button class="btn btn-secondary" :disabled="loading" @click="emit('refresh')">
@@ -68,9 +91,21 @@ const {
 
     <div class="graph-toolbar">
       <form class="graph-search" @submit.prevent="searchNode">
-        <input v-model="searchText" placeholder="搜索：冒泡排序 / 循环 / 资料名" />
+        <input v-model="searchText" :placeholder="searchPlaceholder" />
         <button type="submit">定位</button>
       </form>
+      <div class="scope-switcher">
+        <button
+          v-for="scope in scopes"
+          :key="scope.id"
+          class="scope-chip"
+          :class="{ active: activeScopeId === scope.id }"
+          @click="changeScope(scope.id)"
+        >
+          <span>{{ scope.name }}</span>
+          <b>{{ scope.docCount || 0 }}</b>
+        </button>
+      </div>
       <div class="graph-legend">
         <button
           class="legend-item"
@@ -145,6 +180,20 @@ const {
           <div v-if="selectedNode.meta?.lastSeen" class="node-kv">
             <span>最近出现</span><b>{{ formatDate(selectedNode.meta.lastSeen) }}</b>
           </div>
+          <button
+            v-if="canOpenSelectedScope"
+            class="open-scope-btn"
+            @click="changeScope(selectedScopeId)"
+          >
+            {{ selectedScopeButtonText }}
+          </button>
+          <button
+            v-else-if="activeScopeId !== 'all'"
+            class="open-scope-btn secondary"
+            @click="changeScope('all')"
+          >
+            返回全部图谱
+          </button>
 
           <div v-if="selectedNode.meta?.evidence?.length" class="evidence">
             <strong>证据</strong>
@@ -269,6 +318,7 @@ const {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .graph-search {
@@ -297,6 +347,52 @@ const {
   font-weight: 800;
   padding: 10px 12px;
   cursor: pointer;
+}
+
+.scope-switcher {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px;
+}
+
+.scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  border: 1px solid #e1f1d7;
+  background: #f7fbf3;
+  color: var(--xm-green-dark);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.scope-chip b {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: white;
+  color: #8aa47b;
+  font-size: 11px;
+}
+
+.scope-chip.active {
+  border-color: var(--xm-green);
+  background: var(--xm-green);
+  color: white;
+}
+
+.scope-chip.active b {
+  color: var(--xm-green-dark);
 }
 
 .graph-legend {
@@ -453,6 +549,24 @@ const {
 
 .node-kv b {
   color: #333;
+}
+
+.open-scope-btn {
+  width: 100%;
+  margin-top: 12px;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--xm-green);
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.open-scope-btn.secondary {
+  background: #e6f7d9;
+  color: var(--xm-green-dark);
 }
 
 .evidence,
