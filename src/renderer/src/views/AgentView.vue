@@ -32,7 +32,7 @@ const {
 </script>
 
 <template>
-  <div class="fade-in">
+  <div class="fade-in agent-view">
     <div class="page-header">
       <h1 class="page-title">小实验</h1>
       <p class="page-desc">这里有两个能力：直接查资料，或者让学伴一步一步操作网页</p>
@@ -100,15 +100,15 @@ const {
   </div>
 </template>
 
-<style scoped>
-.mode-tabs {
+<style>
+.agent-view .mode-tabs{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.mode-tab {
+.agent-view .mode-tab{
   display: flex;
   align-items: center;
   gap: 12px;
@@ -121,13 +121,13 @@ const {
   transition: all 0.15s;
 }
 
-.mode-tab.active {
+.agent-view .mode-tab.active{
   border-color: var(--xm-green);
   background: #f0fdf4;
   box-shadow: 0 3px 0 #d9f6cc;
 }
 
-.mode-icon {
+.agent-view .mode-icon{
   width: 38px;
   height: 38px;
   display: inline-flex;
@@ -139,84 +139,84 @@ const {
   flex-shrink: 0;
 }
 
-.mode-tab strong {
+.agent-view .mode-tab strong{
   display: block;
   color: #333;
   font-size: 15px;
   font-weight: 900;
 }
 
-.mode-tab small {
+.agent-view .mode-tab small{
   display: block;
   color: #888;
   font-size: 12px;
   margin-top: 3px;
 }
 
-.helper-layout {
+.agent-view .helper-layout{
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.control-layout {
+.agent-view .control-layout{
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(380px, 44%);
   gap: 16px;
   align-items: start;
 }
 
-.control-main-column {
+.agent-view .control-main-column{
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
 }
 
-.live-browser-column {
+.agent-view .live-browser-column{
   position: sticky;
   top: 16px;
   z-index: 5;
   min-width: 0;
 }
 
-.live-browser-card {
+.agent-view .live-browser-card{
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
 }
 
-.control-title-row,
-.browser-head,
-.steps-header {
+.agent-view .control-title-row,
+.agent-view .browser-head,
+.agent-view .steps-header{
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
 
-.helper-copy,
-.url-text {
+.agent-view .helper-copy,
+.agent-view .url-text{
   color: #888;
   font-size: 13px;
   font-weight: 600;
   margin-top: -8px;
 }
 
-.url-text {
+.agent-view .url-text{
   word-break: break-all;
   margin-top: 0;
 }
 
-.search-row {
+.agent-view .search-row{
   display: flex;
   gap: 10px;
   margin-top: 14px;
 }
 
-.search-input {
+.agent-view .search-input{
   flex: 1;
 }
 
-.state-pill {
+.agent-view .state-pill{
   padding: 6px 13px;
   border-radius: 999px;
   background: #f3f4f6;
@@ -226,47 +226,47 @@ const {
   white-space: nowrap;
 }
 
-.state-opening,
-.state-looking,
-.state-acting {
+.agent-view .state-opening,
+.agent-view .state-looking,
+.agent-view .state-acting{
   background: #dbeafe;
   color: #1d4ed8;
 }
 
-.state-done {
+.agent-view .state-done{
   background: #dcfce7;
   color: #166534;
 }
 
-.state-error {
+.agent-view .state-error{
   background: #fee2e2;
   color: #991b1b;
 }
 
-.state-stopped {
+.agent-view .state-stopped{
   background: #f3f4f6;
   color: #6b7280;
 }
 
-.goal-input {
+.agent-view .goal-input{
   min-height: 86px;
 }
 
-.button-group {
+.agent-view .button-group{
   display: flex;
   align-items: center;
   gap: 10px;
   margin-top: 14px;
 }
 
-.sample-row {
+.agent-view .sample-row{
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
 }
 
-.sample-chip {
+.agent-view .sample-chip{
   border: 1px solid var(--xm-border);
   background: white;
   border-radius: 999px;
@@ -277,14 +277,14 @@ const {
   cursor: pointer;
 }
 
-.sample-chip:hover {
+.agent-view .sample-chip:hover{
   border-color: var(--xm-green);
   color: var(--xm-green-dark);
   background: #f0fdf4;
 }
 
-.error-msg,
-.answer-msg {
+.agent-view .error-msg,
+.agent-view .answer-msg{
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 10px;
@@ -292,24 +292,24 @@ const {
   font-weight: 700;
 }
 
-.error-msg {
+.agent-view .error-msg{
   background: #fee2e2;
   color: #991b1b;
 }
 
-.config-hint {
+.agent-view .config-hint{
   margin-top: 6px;
   color: #7f1d1d;
   font-size: 12px;
 }
 
-.answer-msg,
-.summary-box {
+.agent-view .answer-msg,
+.agent-view .summary-box{
   background: #dcfce7;
   color: #166534;
 }
 
-.summary-box {
+.agent-view .summary-box{
   white-space: pre-wrap;
   padding: 14px;
   border-radius: 12px;
@@ -318,20 +318,20 @@ const {
   font-weight: 700;
 }
 
-.source-title {
+.agent-view .source-title{
   color: #777;
   font-size: 13px;
   font-weight: 900;
   margin: 16px 0 8px;
 }
 
-.source-list {
+.agent-view .source-list{
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.source-item {
+.agent-view .source-item{
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -341,18 +341,18 @@ const {
   text-decoration: none;
 }
 
-.source-item strong {
+.agent-view .source-item strong{
   color: #333;
   font-size: 14px;
 }
 
-.source-item small {
+.agent-view .source-item small{
   color: #888;
   font-size: 12px;
   word-break: break-all;
 }
 
-.live-badge {
+.agent-view .live-badge{
   padding: 5px 10px;
   border-radius: 999px;
   background: #ecfdf5;
@@ -363,7 +363,7 @@ const {
   white-space: nowrap;
 }
 
-.live-browser-box {
+.agent-view .live-browser-box{
   margin-top: 12px;
   border: 2px solid var(--xm-border);
   border-radius: 14px;
@@ -375,7 +375,7 @@ const {
   position: relative;
 }
 
-.live-browser-box img {
+.agent-view .live-browser-box img{
   display: block;
   width: 100%;
   height: 100%;
@@ -383,13 +383,13 @@ const {
   background: #fff;
 }
 
-.live-browser-box.empty {
+.agent-view .live-browser-box.empty{
   align-items: center;
   justify-content: center;
   background: #f7f7f7;
 }
 
-.screenshot-placeholder {
+.agent-view .screenshot-placeholder{
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -399,34 +399,34 @@ const {
   padding: 32px;
 }
 
-.book-icon {
+.agent-view .book-icon{
   font-size: 34px;
 }
 
-.screenshot-placeholder small {
+.agent-view .screenshot-placeholder small{
   color: #999;
   font-size: 13px;
 }
 
-.step-count {
+.agent-view .step-count{
   color: #999;
   font-size: 13px;
   font-weight: 900;
 }
 
-.empty-steps {
+.agent-view .empty-steps{
   color: #999;
   font-size: 14px;
   font-weight: 600;
 }
 
-.dom-list {
+.agent-view .dom-list{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.dom-item {
+.agent-view .dom-item{
   display: flex;
   gap: 10px;
   padding: 10px;
@@ -435,7 +435,7 @@ const {
   background: #fbfbfb;
 }
 
-.dom-id {
+.agent-view .dom-id{
   width: 34px;
   height: 34px;
   border-radius: 10px;
@@ -449,12 +449,12 @@ const {
   font-weight: 900;
 }
 
-.dom-main {
+.agent-view .dom-main{
   flex: 1;
   min-width: 0;
 }
 
-.dom-title {
+.agent-view .dom-title{
   display: flex;
   align-items: center;
   gap: 7px;
@@ -463,14 +463,14 @@ const {
   font-weight: 800;
 }
 
-.dom-title span,
-.dom-title small {
+.agent-view .dom-title span,
+.agent-view .dom-title small{
   color: #888;
   font-size: 11px;
   font-weight: 800;
 }
 
-.dom-label {
+.agent-view .dom-label{
   margin-top: 4px;
   color: #555;
   font-size: 12px;
@@ -480,14 +480,14 @@ const {
   text-overflow: ellipsis;
 }
 
-.dom-meta {
+.agent-view .dom-meta{
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
   margin-top: 6px;
 }
 
-.dom-meta span {
+.agent-view .dom-meta span{
   padding: 2px 7px;
   border-radius: 999px;
   background: #f3f4f6;
@@ -496,13 +496,13 @@ const {
   font-weight: 900;
 }
 
-.steps-list {
+.agent-view .steps-list{
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.step-item {
+.agent-view .step-item{
   display: flex;
   gap: 12px;
   padding: 12px;
@@ -510,7 +510,7 @@ const {
   background: #f7f7f7;
 }
 
-.step-num {
+.agent-view .step-num{
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -524,52 +524,52 @@ const {
   font-weight: 900;
 }
 
-.step-done {
+.agent-view .step-done{
   background: #dcfce7;
   color: #166534;
 }
 
-.step-error {
+.agent-view .step-error{
   background: #fee2e2;
   color: #991b1b;
 }
 
-.step-body {
+.agent-view .step-body{
   flex: 1;
   min-width: 0;
 }
 
-.step-thinking {
+.agent-view .step-thinking{
   color: #333;
   font-size: 14px;
   font-weight: 800;
   margin-bottom: 4px;
 }
 
-.step-action {
+.agent-view .step-action{
   color: #777;
   font-size: 13px;
   font-weight: 700;
 }
 
-.feature-grid {
+.agent-view .feature-grid{
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
-.feature {
+.agent-view .feature{
   padding: 14px;
   background: #f7f7f7;
   border-radius: 12px;
 }
 
-.feature strong {
+.agent-view .feature strong{
   color: #333;
   font-size: 14px;
 }
 
-.feature p {
+.agent-view .feature p{
   color: #777;
   font-size: 13px;
   line-height: 1.4;
@@ -577,22 +577,22 @@ const {
 }
 
 @media (max-width: 900px) {
-  .feature-grid,
-  .mode-tabs,
-  .dom-list,
-  .control-layout {
+  .agent-view .feature-grid,
+.agent-view .mode-tabs,
+.agent-view .dom-list,
+.agent-view .control-layout{
     grid-template-columns: 1fr;
   }
 
-  .live-browser-column {
+  .agent-view .live-browser-column{
     position: static;
   }
 
-  .live-browser-box {
+  .agent-view .live-browser-box{
     height: 320px;
   }
 
-  .search-row {
+  .agent-view .search-row{
     flex-direction: column;
   }
 }

@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto'
 import * as ragDao from '../dao/ragDao'
+import type { ChunkRow } from '../dao/ragDao'
 import type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../domain/rag'
 import { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../domain/rag'
-import { embeddingToBlob, rowToChunk, rowToCollection, rowToDocument } from '../mappers/ragMapper'
+import { blobToEmbedding, embeddingToBlob, rowToChunk, rowToCollection, rowToDocument } from '../mappers/ragMapper'
 
 export type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../domain/rag'
 export { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../domain/rag'
@@ -450,11 +451,6 @@ export async function retrieve(
   const collectionId = normalizeCollectionId(rawCollectionId)
   if (collectionId) assertCollection(collectionId)
 
-  const rows = (
-    collectionId ? ragDao.findChunksByCollection(collectionId) : ragDao.findAllChunks()
-  ) as any[]
-  if (rows.length === 0) return []
-
   const queryTokens = keywordTerms(query)
   let queryEmbedding: number[] | null = null
   let weights = HYBRID_WEIGHTS
@@ -462,16 +458,28 @@ export async function retrieve(
   try {
     queryEmbedding = await getEmbedding(query)
   } catch (error: any) {
-    console.warn('[RAG] dense embedding 失败，降级到 lexical-only 检索:', error.message)
+    console.warn('[RAG] dense embedding 失败，降级到 bounded lexical 检索:', error.message)
     weights = LEXICAL_ONLY_WEIGHTS
   }
 
-  const scored: RetrieveResult[] = rows
+  const denseScores = queryEmbedding ? scoreChunkEmbeddings(queryEmbedding, collectionId) : null
+  const fullRows = denseScores
+    ? ragDao.findChunksByIds(denseScores.rankedIds.slice(0, Math.max(candidateK * 3, topK * 12)))
+    : ragDao.findChunksByKeywordTerms(
+        queryTokens,
+        collectionId,
+        Math.max(candidateK * 8, RETRIEVAL_POOL_SIZE * 4)
+      )
+
+  if (fullRows.length === 0) return []
+
+  const denseByChunkId = denseScores?.denseByChunkId || new Map<string, number>()
+
+  const scored: RetrieveResult[] = fullRows
     .filter((row) => row.embedding)
     .map((row) => {
       const chunk = rowToChunk(row)
-      const denseRaw = queryEmbedding ? cosineSimilarity(queryEmbedding, chunk.embedding) : 0
-      const denseScore = queryEmbedding ? clamp01((denseRaw + 1) / 2) : 0
+      const denseScore = queryEmbedding ? denseByChunkId.get(row.id) || 0 : 0
       const lexical = lexicalScore(queryTokens, chunk.content)
       const structure = structureScore(queryTokens, chunk)
       const score = clamp01(
@@ -530,6 +538,31 @@ export async function retrieve(
   }
 
   return selected
+}
+
+function scoreChunkEmbeddings(
+  queryEmbedding: number[],
+  collectionId: string | undefined
+): { denseByChunkId: Map<string, number>; rankedIds: string[] } {
+  const rows = collectionId
+    ? ragDao.findChunkEmbeddingsByCollection(collectionId)
+    : ragDao.findChunkEmbeddings()
+
+  const scored = rows
+    .filter((row) => row.embedding)
+    .map((row) => {
+      const denseRaw = cosineSimilarity(queryEmbedding, blobToEmbedding(row.embedding!))
+      return {
+        id: row.id,
+        denseScore: clamp01((denseRaw + 1) / 2)
+      }
+    })
+    .sort((a, b) => b.denseScore - a.denseScore)
+
+  return {
+    denseByChunkId: new Map(scored.map((item) => [item.id, item.denseScore])),
+    rankedIds: scored.map((item) => item.id)
+  }
 }
 
 export function buildRagContext(

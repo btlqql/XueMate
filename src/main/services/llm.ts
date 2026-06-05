@@ -12,8 +12,8 @@ interface ChatOptions {
 
 const API_KEY = process.env.DEEPSEEK_API_KEY || ''
 const BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1/chat/completions'
-const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
-const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
+const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
+const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-reasoner'
 
 export { MODEL, PRO_MODEL }
 
@@ -38,8 +38,7 @@ export async function chat(options: ChatOptions & { timeoutMs?: number }): Promi
       model: useModel,
       messages,
       max_tokens: maxTokens,
-      temperature,
-      thinking: { type: 'disabled' }
+      temperature
     }
 
     try {
@@ -104,8 +103,7 @@ export async function chatStream(
     messages,
     max_tokens: maxTokens,
     stream: true,
-    temperature,
-    thinking: { type: 'disabled' }
+    temperature
   }
 
   try {
@@ -124,7 +122,8 @@ export async function chatStream(
       throw new Error(friendlyErrors[status] || `请求失败 (${status})`)
     }
 
-    const reader = response.body!.getReader()
+    if (!response.body) throw new Error('未收到响应流')
+    const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let fullContent = ''
     let buffer = ''

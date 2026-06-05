@@ -18,6 +18,17 @@ export interface DocumentRow {
   created_at: number
 }
 
+export interface ChunkEmbeddingRow {
+  id: string
+  document_id: string
+  collection_id?: string
+  file_name: string
+  embedding?: Buffer | null
+  start_pos: number
+  end_pos: number
+  created_at: number
+}
+
 export interface ChunkRow {
   id: string
   document_id: string
@@ -82,6 +93,12 @@ const stmts = {
   insertChunk: db.prepare(
     `INSERT INTO chunks (id, document_id, collection_id, file_name, content, embedding, start_pos, end_pos, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ),
+  getAllChunkEmbeddings: db.prepare(
+    'SELECT id, document_id, collection_id, file_name, embedding, start_pos, end_pos, created_at FROM chunks WHERE embedding IS NOT NULL'
+  ),
+  getChunkEmbeddingsByCollection: db.prepare(
+    'SELECT id, document_id, collection_id, file_name, embedding, start_pos, end_pos, created_at FROM chunks WHERE collection_id = ? AND embedding IS NOT NULL'
   ),
   getAllChunks: db.prepare('SELECT * FROM chunks'),
   getChunksByCollection: db.prepare('SELECT * FROM chunks WHERE collection_id = ?'),
@@ -160,6 +177,57 @@ export function findAllChunks(): ChunkRow[] {
 
 export function findChunksByCollection(collectionId: string): ChunkRow[] {
   return stmts.getChunksByCollection.all(collectionId) as ChunkRow[]
+}
+
+export function findChunkEmbeddings(): ChunkEmbeddingRow[] {
+  return stmts.getAllChunkEmbeddings.all() as ChunkEmbeddingRow[]
+}
+
+export function findChunkEmbeddingsByCollection(collectionId: string): ChunkEmbeddingRow[] {
+  return stmts.getChunkEmbeddingsByCollection.all(collectionId) as ChunkEmbeddingRow[]
+}
+
+export function findChunksByIds(ids: string[]): ChunkRow[] {
+  if (ids.length === 0) return []
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`).all(...ids) as ChunkRow[]
+  const rank = new Map(ids.map((id, index) => [id, index]))
+  return rows.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+}
+
+export function findRecentChunks(collectionId: string | undefined, limit: number): ChunkRow[] {
+  if (collectionId) {
+    return db
+      .prepare('SELECT * FROM chunks WHERE collection_id = ? ORDER BY created_at DESC, start_pos ASC LIMIT ?')
+      .all(collectionId, limit) as ChunkRow[]
+  }
+  return db
+    .prepare('SELECT * FROM chunks ORDER BY created_at DESC, start_pos ASC LIMIT ?')
+    .all(limit) as ChunkRow[]
+}
+
+export function findChunksByKeywordTerms(
+  terms: string[],
+  collectionId: string | undefined,
+  limit: number
+): ChunkRow[] {
+  const normalizedTerms = terms.map((term) => term.trim()).filter(Boolean).slice(0, 8)
+  if (normalizedTerms.length === 0) return findRecentChunks(collectionId, limit)
+
+  const clauses = normalizedTerms.map(() => '(content LIKE ? OR file_name LIKE ?)').join(' OR ')
+  const params = normalizedTerms.flatMap((term) => [`%${term}%`, `%${term}%`])
+
+  if (collectionId) {
+    return db
+      .prepare(
+        `SELECT * FROM chunks WHERE collection_id = ? AND (${clauses}) ORDER BY created_at DESC, start_pos ASC LIMIT ?`
+      )
+      .all(collectionId, ...params, limit) as ChunkRow[]
+  }
+
+  return db
+    .prepare(`SELECT * FROM chunks WHERE ${clauses} ORDER BY created_at DESC, start_pos ASC LIMIT ?`)
+    .all(...params, limit) as ChunkRow[]
 }
 
 export function findDocuments(): DocumentRow[] {

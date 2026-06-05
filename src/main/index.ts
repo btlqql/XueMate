@@ -36,12 +36,9 @@ import {
 import * as rag from './services/rag'
 import { buildLearningGraph } from './services/learningGraph'
 import * as taskStore from './services/taskStore'
-import { migrateFromJson } from './services/migrate'
 import { ensureEnoughText, extractTextFromFile } from './services/document'
 
 // 启动时自动迁移旧数据
-migrateFromJson()
-
 let agentRunning = false
 let webAssistantRunning = false
 
