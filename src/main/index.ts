@@ -35,6 +35,7 @@ import {
 } from './services/memory'
 import * as rag from './services/rag'
 import { buildLearningGraph } from './services/learningGraph'
+import { startRendererBridge, stopRendererBridge } from './services/rendererBridge'
 import * as taskStore from './services/taskStore'
 import { ensureEnoughText, extractTextFromFile } from './services/document'
 
@@ -602,6 +603,7 @@ app.whenReady().then(() => {
   })
 
   registerLLMHandlers()
+  startRendererBridge(Number(process.env.XUEMATE_RENDERER_BRIDGE_PORT || 8788))
   createWindow()
 
   // 截止日期提醒：每 10 分钟检查一次
@@ -651,6 +653,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   destroyWebView()
+  stopRendererBridge()
   if (process.platform !== 'darwin') {
     app.quit()
   }

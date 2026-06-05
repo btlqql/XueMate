@@ -57,6 +57,7 @@ const englishStopWords = new Set([
   'their',
   'about',
   'of',
+  'is',
   'using',
   'use',
   'can',
@@ -101,6 +102,7 @@ const chineseStopWords = new Set([
   '一些',
   '内容',
   '资料',
+  '演示',
   '文档',
   '文件',
   '学生',
@@ -155,7 +157,8 @@ const chineseStopWords = new Set([
   '自动',
   '默认',
   '当前',
-  '全部'
+  '全部',
+  '等于'
 ])
 
 function normalizeCollectionId(collectionId?: string): string | null {

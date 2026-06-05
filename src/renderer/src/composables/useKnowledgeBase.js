@@ -1,4 +1,5 @@
 import { computed, onMounted, ref } from 'vue'
+import { ragClient } from '../services/ragClient'
 
 export function useKnowledgeBase() {
   const collections = ref([])
@@ -51,7 +52,7 @@ export function useKnowledgeBase() {
 
   async function loadCollections() {
     try {
-      const result = await window.rag.collections()
+      const result = await ragClient.collections()
       if (result.success) {
         collections.value = result.data || []
         if (!collections.value.some((collection) => collection.id === activeCollectionId.value)) {
@@ -76,8 +77,8 @@ export function useKnowledgeBase() {
     try {
       const collectionId = activeCollectionId.value || 'default'
       const [docRes, statsRes] = await Promise.all([
-        window.rag.documents(collectionId),
-        window.rag.stats(collectionId)
+        ragClient.documents(collectionId),
+        ragClient.stats(collectionId)
       ])
       if (docRes.success) documents.value = docRes.data || []
       else error.value = docRes.error || '加载文档失败'
@@ -97,7 +98,7 @@ export function useKnowledgeBase() {
     graphError.value = ''
     const graphId = activeGraphId.value || 'all'
     try {
-      const result = await window.rag.learningGraph(graphId)
+      const result = await ragClient.learningGraph(graphId)
       if (result.success) {
         graphData.value = result.data || null
       } else {
@@ -138,7 +139,7 @@ export function useKnowledgeBase() {
     creating.value = true
     error.value = ''
     try {
-      const result = await window.rag.createCollection(name)
+      const result = await ragClient.createCollection(name)
       if (result.success && result.data) {
         activeCollectionId.value = result.data.id
         activeGraphId.value = result.data.id
@@ -161,7 +162,7 @@ export function useKnowledgeBase() {
     error.value = ''
 
     try {
-      const result = await window.rag.selectAndImport(activeCollectionId.value || 'default')
+      const result = await ragClient.selectAndImport(activeCollectionId.value || 'default')
       if (result.success) {
         const { imported = [], errors = [] } = result.data || {}
         if (errors.length > 0) {
@@ -184,7 +185,7 @@ export function useKnowledgeBase() {
   async function deleteDoc(doc) {
     if (!confirm(`确定删除 "${doc.fileName}"？`)) return
     try {
-      await window.rag.delete(doc.id)
+      await ragClient.delete(doc.id)
       await loadCollections()
       await loadData()
     } catch (e) {
