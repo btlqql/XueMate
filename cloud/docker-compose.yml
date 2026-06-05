@@ -11,13 +11,19 @@ services:
     environment:
       XUEMATE_CLOUD_HOST: 0.0.0.0
       XUEMATE_CLOUD_PORT: 8787
+      XUEMATE_CLOUD_FAST_MODE: "true"
+      XUEMATE_CLOUD_SEARXNG_TIMEOUT_MS: 2500
+      XUEMATE_CLOUD_DIRECT_SEARCH_TIMEOUT_MS: 3500
+      XUEMATE_CLOUD_CRAWL4AI_TIMEOUT_MS: 4000
+      XUEMATE_CLOUD_PAGE_FETCH_CONCURRENCY: 4
+      XUEMATE_CLOUD_CACHE_MAX_ENTRIES: 250
+      XUEMATE_CLOUD_TASK_MAX_ENTRIES: 300
       SEARXNG_URL: http://searxng:8080
-      CRAWL4AI_URL: http://crawl4ai:11235
+      CRAWL4AI_ENABLED: "false"
     volumes:
       - ./gateway/server.mjs:/app/server.mjs:ro
     depends_on:
       - searxng
-      - crawl4ai
     restart: unless-stopped
 
   searxng:
@@ -44,25 +50,6 @@ services:
     command: valkey-server --save 30 1 --loglevel warning
     volumes:
       - searxng-valkey-data:/data
-    restart: unless-stopped
-
-  crawl4ai:
-    build:
-      context: ./services/crawler/crawl4ai
-      dockerfile: Dockerfile
-      args:
-        INSTALL_TYPE: default
-        ENABLE_GPU: "false"
-    image: xuemate/crawl4ai-local:latest
-    container_name: xuemate-crawl4ai
-    ports:
-      - "11235:11235"
-    environment:
-      CRAWL4AI_API_TOKEN: ""
-      CRAWL4AI_HOOKS_ENABLED: "false"
-    volumes:
-      - /dev/shm:/dev/shm
-    shm_size: 1gb
     restart: unless-stopped
 
 volumes:
