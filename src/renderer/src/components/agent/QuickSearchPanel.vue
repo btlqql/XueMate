@@ -49,7 +49,7 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
       <div class="result-head">
         <h2 class="section-title">查到的内容</h2>
         <div class="mode-badge" :class="searchResult.mode === 'cloud' ? 'cloud' : 'local'">
-          {{ searchResult.mode === 'cloud' ? '云端网络资源分析' : '本地搜索回退' }}
+          {{ searchResult.mode === 'cloud' ? '云端网络资源分析' : '本地快速搜索' }}
         </div>
       </div>
       <div class="cloud-meta" v-if="searchResult.mode === 'cloud'">
@@ -100,7 +100,7 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
         </div>
         <div class="feature">
           <strong>云端筛选</strong>
-          <p>启动云端后会按适龄性、可信度、可读性给网页评分。</p>
+          <p>高级模式可按适龄性、可信度、可读性给网页评分。</p>
         </div>
         <div class="feature">
           <strong>更快</strong>

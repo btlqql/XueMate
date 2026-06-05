@@ -11,7 +11,7 @@ const props = defineProps({
   scopeName: { type: String, default: '全部图谱' }
 })
 
-const emit = defineEmits(['refresh', 'scope-change'])
+const emit = defineEmits(['refresh', 'scope-change', 'locate-document'])
 
 const {
   container,
@@ -22,12 +22,16 @@ const {
   graphCanvasReady,
   renderStage,
   renderError,
+  isSubgraphMode,
+  subgraphTitle,
   typeConfig,
   hasGraph,
   graphStatusText,
   legendItems,
   searchPlaceholder,
   searchNode,
+  enterSubgraph,
+  exitSubgraph,
   fitGraph,
   formatPercent,
   formatDate
@@ -45,6 +49,55 @@ const canOpenSelectedScope = computed(
 const selectedScopeButtonText = computed(() =>
   selectedNode.value?.type === 'collection' ? '进入这个图谱' : '查看所在图谱'
 )
+
+function sourceFromMeta(meta = {}) {
+  const refs = meta.evidenceRefs || meta.sourceRefs || []
+  const source = meta.documentId ? meta : refs[0]
+  if (!source?.documentId) return null
+  return {
+    collectionId: source.collectionId,
+    collectionName: source.collectionName,
+    documentId: source.documentId,
+    chunkId: source.chunkId,
+    fileName: source.fileName || meta.fileName,
+    startPos: source.startPos,
+    endPos: source.endPos,
+    snippet: source.snippet
+  }
+}
+
+const articleTarget = computed(() => {
+  if (!selectedNode.value) return null
+  const direct = sourceFromMeta(selectedNode.value.meta)
+  if (direct) {
+    return {
+      ...direct,
+      sourceNodeId: selectedNode.value.id,
+      sourceNodeLabel: selectedNode.value.label,
+      sourceNodeType: selectedNode.value.type
+    }
+  }
+
+  for (const link of selectedLinks.value) {
+    const linked = sourceFromMeta(link.otherMeta)
+    if (linked) {
+      return {
+        ...linked,
+        sourceNodeId: link.otherId,
+        sourceNodeLabel: link.otherLabel,
+        sourceNodeType: link.otherType
+      }
+    }
+  }
+  return null
+})
+
+const locateButtonText = computed(() => (articleTarget.value?.chunkId ? '定位到文章片段' : '定位到文章'))
+
+function locateArticle() {
+  if (!articleTarget.value) return
+  emit('locate-document', articleTarget.value)
+}
 
 function changeScope(scopeId) {
   emit('scope-change', scopeId || 'all')
@@ -141,7 +194,13 @@ function changeScope(scopeId) {
           <strong>{{ renderStage }}</strong>
           <span v-if="renderError">{{ renderError }}</span>
         </div>
-        <button class="fit-btn" @click="fitGraph">回到全图</button>
+        <div v-if="isSubgraphMode" class="subgraph-badge">
+          <span>子图谱：{{ subgraphTitle }}</span>
+          <button @click="exitSubgraph">退出</button>
+        </div>
+        <button class="fit-btn" @click="isSubgraphMode ? exitSubgraph() : fitGraph()">
+          {{ isSubgraphMode ? '退出子图谱' : '回到全图' }}
+        </button>
       </div>
 
       <aside class="node-panel">
@@ -180,6 +239,34 @@ function changeScope(scopeId) {
             <span>最近出现</span><b>{{ formatDate(selectedNode.meta.lastSeen) }}</b>
           </div>
           <button
+            v-if="!isSubgraphMode"
+            class="open-scope-btn subgraph-action"
+            @click="enterSubgraph(selectedNode.id)"
+          >
+            查看子图谱
+          </button>
+          <button
+            v-else
+            class="open-scope-btn secondary subgraph-action"
+            @click="exitSubgraph"
+          >
+            退出子图谱
+          </button>
+          <button
+            v-if="articleTarget"
+            class="open-scope-btn locate-action"
+            @click="locateArticle"
+          >
+            {{ locateButtonText }}
+          </button>
+          <div v-if="articleTarget" class="article-hint">
+            <strong>可定位资料</strong>
+            <p>{{ articleTarget.fileName }}</p>
+            <span v-if="articleTarget.startPos !== undefined">
+              片段位置：{{ articleTarget.startPos }} - {{ articleTarget.endPos }}
+            </span>
+          </div>
+          <button
             v-if="canOpenSelectedScope"
             class="open-scope-btn"
             @click="changeScope(selectedScopeId)"
@@ -205,7 +292,7 @@ function changeScope(scopeId) {
               v-for="link in selectedLinks"
               :key="link.id"
               class="link-item"
-              @click="selectNode(link.source === selectedNode.id ? link.target : link.source, true)"
+              @click="enterSubgraph(link.source === selectedNode.id ? link.target : link.source)"
             >
               <span>{{ link.label }}</span>
               <b>{{ link.otherLabel }}</b>
@@ -500,6 +587,43 @@ function changeScope(scopeId) {
   backdrop-filter: blur(8px);
 }
 
+.subgraph-badge {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  border: 1px solid rgba(88, 204, 2, 0.28);
+  border-radius: 999px;
+  padding: 7px 8px 7px 11px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--xm-green-dark);
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 8px 22px rgba(88, 204, 2, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.subgraph-badge span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.subgraph-badge button {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #e6f7d9;
+  color: var(--xm-green-dark);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .node-panel {
   border: 1px solid #e5e5e5;
   border-radius: 16px;
@@ -566,6 +690,45 @@ function changeScope(scopeId) {
 .open-scope-btn.secondary {
   background: #e6f7d9;
   color: var(--xm-green-dark);
+}
+
+.subgraph-action {
+  background: #ffc800;
+  color: #5f4500;
+}
+
+.locate-action {
+  background: #58cc02;
+}
+
+.article-hint {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #e1f1d7;
+  background: #ffffff;
+}
+
+.article-hint strong {
+  display: block;
+  color: var(--xm-green-dark);
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 5px;
+}
+
+.article-hint p {
+  color: #333;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.article-hint span {
+  color: #8aa47b;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .evidence,

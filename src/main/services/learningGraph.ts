@@ -37,6 +37,17 @@ interface ConceptExtractOptions {
   maxTerms?: number
 }
 
+interface ConceptEvidenceRef {
+  documentId: string
+  collectionId: string
+  collectionName?: string
+  fileName: string
+  chunkId: string
+  startPos: number
+  endPos: number
+  snippet: string
+}
+
 const MAX_DOC_NODES = 32
 const MAX_CHUNK_SCAN = 420
 const MAX_CHUNK_NODES = 42
@@ -437,6 +448,7 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
   const conceptScore = new Map<string, number>()
   const docConceptWeight = new Map<string, Map<string, number>>()
   const chunkConcepts = new Map<string, ConceptRule[]>()
+  const conceptEvidence = new Map<string, ConceptEvidenceRef[]>()
 
   const addNode = (node: LearningGraphNode): void => {
     const existing = nodes.get(node.id)
@@ -505,6 +517,7 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
       size: clamp(7 + Math.sqrt(doc.chunk_count || 1), 8, 18),
       score: clamp((doc.chunk_count || 1) / 40, 0.2, 1),
       meta: {
+        documentId: doc.id,
         fileName: doc.file_name,
         chunkCount: doc.chunk_count,
         collectionId: doc.collection_id,
@@ -533,6 +546,21 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
       const docMap = docConceptWeight.get(chunk.document_id) || new Map<string, number>()
       docMap.set(concept.id, (docMap.get(concept.id) || 0) + concept.confidence)
       docConceptWeight.set(chunk.document_id, docMap)
+
+      const refs = conceptEvidence.get(concept.id) || []
+      if (refs.length < 6 && !refs.some((ref) => ref.chunkId === chunk.id)) {
+        refs.push({
+          documentId: chunk.document_id,
+          collectionId: chunk.collection_id,
+          collectionName: doc?.collection_name,
+          fileName: chunk.file_name,
+          chunkId: chunk.id,
+          startPos: chunk.start_pos,
+          endPos: chunk.end_pos,
+          snippet: safeText(chunk.content, 180)
+        })
+        conceptEvidence.set(concept.id, refs)
+      }
     }
   }
 
@@ -546,6 +574,8 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
     const concept = conceptById.get(conceptId)
     if (!concept) continue
     const score = conceptScore.get(conceptId) || 1
+    const evidenceRefs = conceptEvidence.get(concept.id) || []
+    const primaryEvidence = evidenceRefs[0]
     addNode({
       id: concept.id,
       label: concept.label,
@@ -558,6 +588,11 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
         aliases: concept.aliases || [],
         source: concept.source,
         confidence: concept.confidence,
+        documentId: primaryEvidence?.documentId,
+        collectionId: primaryEvidence?.collectionId,
+        collectionName: primaryEvidence?.collectionName,
+        fileName: primaryEvidence?.fileName,
+        evidenceRefs,
         dynamic: true
       }
     })
@@ -589,8 +624,14 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
       size: clamp(5 + concepts.length * 1.4, 6, 12),
       score: clamp(concepts.length / 6, 0.2, 1),
       meta: {
+        chunkId: chunk.id,
+        documentId: chunk.document_id,
+        collectionId: chunk.collection_id,
+        collectionName: docsById.get(chunk.document_id)?.collection_name,
         fileName: chunk.file_name,
         snippet: safeText(chunk.content, 180),
+        startPos: chunk.start_pos,
+        endPos: chunk.end_pos,
         position: `${chunk.start_pos}-${chunk.end_pos}`
       }
     })

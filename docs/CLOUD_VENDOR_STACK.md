@@ -1,64 +1,42 @@
 # XueMate Cloud Vendor Stack
 
-XueMate Cloud 采用“开源微服务内置 + 自研 Gateway 编排”的方式：
+XueMate Cloud 现在采用轻量云端网络栈：去掉 Crawl4AI 重型浏览器镜像，保留搜索聚合、云端编排、网页正文抽取、资源评分和指标。
 
 ```txt
 XueMate Electron
   -> XueMate Cloud Gateway (:8787)
       -> SearXNG (:8080) 搜索聚合
-      -> Crawl4AI (:11235) 网页抽取/Markdown 清洗
+      -> Gateway Direct Fetch 网页正文抽取/清洗
       -> XueMate Scorer 适龄性/可信度/可读性评分
 ```
 
-## 已搬入的开源仓库
+## 已保留的开源模块
 
 | 模块 | 路径 | 作用 | 协议 |
 |---|---|---|---|
-| Crawl4AI | `/Users/wangyue/wangyue/XueMate/cloud/services/crawler/crawl4ai` | 网页抓取、正文抽取、Markdown 化、JS 页面处理 | Apache-2.0 |
-| SearXNG | `/Users/wangyue/wangyue/XueMate/cloud/services/search/searxng` | 元搜索/多搜索源聚合源码；运行时可用官方镜像快速启动 | AGPL-3.0 |
+| SearXNG | `/Users/wangyue/wangyue/XueMate/cloud/services/search/searxng` | 元搜索/多搜索源聚合源码；运行时用官方镜像快速启动 | AGPL-3.0 |
 
-## Vendor 精简策略
+## 为什么删除 Crawl4AI
 
-已经删除上游仓库中与运行无关的内容：
+Crawl4AI 官方镜像会携带浏览器/Playwright/Chromium/Python 依赖，首次拉取和启动都偏重。比赛演示优先要求稳定，所以当前版本改成：
 
-- README / docs / changelog / sponsor / roadmap 等说明文档。
-- tests / CI / .github / .vscode / devcontainer 等开发辅助目录。
-- 示例测试文件、站点文档构建配置、无关隐藏配置。
-
-保留内容：
-
-- `cloud/third_party_licenses/`：保留开源协议来源。
-- 运行源码：`crawl4ai/`、`searx/`、`searxng_extra/`。
-- Docker/服务配置：`Dockerfile`、`container/`、`deploy/docker/`。
-- Python 依赖和包元数据：`requirements*.txt`、`pyproject.toml`、`setup.py`、`uv.lock`。
-
-精简后 cloud 目录保留两类源码：Crawl4AI 最小可构建源码、SearXNG 搜索服务核心源码；删除文档/测试/CI 等无关文件。运行时为了启动速度，docker-compose 默认使用 SearXNG 官方镜像，但项目内仍保留源码，便于答辩展示和后续二次开发。
-
-## 为什么 SearXNG 仍默认用镜像启动
-
-项目里已经保留 SearXNG 核心源码：
-
-- `/Users/wangyue/wangyue/XueMate/cloud/services/search/searxng/searx`
-- `/Users/wangyue/wangyue/XueMate/cloud/services/search/searxng/searxng_extra`
-- `/Users/wangyue/wangyue/XueMate/cloud/services/search/searxng/container`
-
-但本地演示时使用官方镜像启动更快、更稳定。答辩口径是：
-
-> XueMate Cloud 内置了开源搜索聚合服务源码，并通过 Gateway 进行教育场景编排；演示环境使用容器镜像快速部署，后续可以直接基于本地源码裁剪搜索引擎和排序策略。
+1. SearXNG 负责云端搜索聚合。
+2. Gateway 直接抓取网页 HTML 并做正文清洗。
+3. Scorer 进行相关度、适龄性、可信度、可读性、广告噪声评分。
+4. Electron 端展示云端模式、TaskId、阶段流水和评分。
 
 ## 本地启动
 
 ```bash
-cd /Users/wangyue/wangyue/XueMate/cloud
-docker compose up --build
+cd /Users/wangyue/wangyue/XueMate
+npm run cloud:docker
 ```
 
 健康检查：
 
 ```bash
 curl http://127.0.0.1:8787/health
-curl http://127.0.0.1:8080/search?q=小学生冒泡排序&format=json
-curl http://127.0.0.1:11235/health
+curl 'http://127.0.0.1:8080/search?q=小学生冒泡排序&format=json'
 ```
 
 资源搜索：
@@ -69,60 +47,55 @@ curl -X POST http://127.0.0.1:8787/api/resource/search \
   -d '{"query":"小学生冒泡排序动画讲解","limit":4}'
 ```
 
-## 比赛表达
+## 服务器部署
 
-这不是普通后端，而是“云端网络资源智能调度层”：
+服务器资源更充足时使用全量模式，额外启用 Crawl4AI basic-amd64 浏览器抽取服务：
 
-1. SearXNG 负责开放网络学习资源聚合。
-2. Crawl4AI 负责网页正文抽取和噪声过滤。
-3. XueMate Gateway 负责任务编排、质量评分、缓存和指标。
-4. Electron 端保留学生本地资料和学习画像，形成云边协同。
+```bash
+cd /home/wzu/xuemate-cloud
+docker compose -f docker-compose.yml -f docker-compose.full.yml -f docker-compose.server.yml up -d
+```
 
-## Electron 端如何连接云端
+当前服务器目标：
+
+```txt
+100.70.188.115:8787  -> XueMate Cloud Gateway
+100.70.188.115:8080  -> SearXNG
+100.70.188.115:11235 -> Crawl4AI
+```
 
 Electron 主进程通过环境变量连接 Cloud Gateway：
 
 ```bash
-XUEMATE_CLOUD_URL=http://127.0.0.1:8787
+XUEMATE_CLOUD_URL=http://100.70.188.115:8787
 ```
 
-当前已接入的链路：
+如果云端不可用，`/Users/wangyue/wangyue/XueMate/src/main/services/quickSearch.ts` 会自动回退到本地 `searchAndFetch()`。
 
-```txt
-前端 快速查资料
-  -> window.quickSearch.run(query)
-  -> ipcMain quickSearch:run
-  -> /Users/wangyue/wangyue/XueMate/src/main/services/quickSearch.ts
-  -> /Users/wangyue/wangyue/XueMate/src/main/services/cloud.ts
-  -> XueMate Cloud Gateway /api/resource/search
-  -> SearXNG 搜索聚合
-  -> Crawl4AI 网页抽取
-  -> XueMate 资源评分
-  -> 前端显示云端模式、TaskId、阶段、评分
-```
 
-如果云端没有启动，`quickSearch.ts` 会自动回退到本地 `searchAndFetch()`，所以不会影响普通演示。
+## 搜索稳定性优化
 
-### 启动顺序
+服务器上 SearXNG 的免费搜索源可能被上游搜索引擎限流。Gateway 已做三层兜底：
 
-1. 启动云端：
+1. 查询改写：例如“小学生 Python 冒泡排序 动画课程”会改写为“Python 冒泡排序”。
+2. 搜索回退：SearXNG 无结果时回退到直接搜索结果页抓取。
+3. 编程学习种子源：识别 Python/排序/冒泡场景时加入菜鸟教程、博客园、慕课、SegmentFault 等候选源，再统一交给 Crawl4AI 抽取和 Scorer 评分。
 
-```bash
-cd /Users/wangyue/wangyue/XueMate
-npm run cloud:docker
-```
+## 2026-06-05 快搜优化
 
-2. 另开一个终端启动 Electron：
+原问题：全量云端查找慢，主要来自 SearXNG 上游搜索源限流/超时，以及 Crawl4AI 同步抽网页逐个执行。
 
-```bash
-cd /Users/wangyue/wangyue/XueMate
-npm run dev
-```
+当前优化：
 
-3. 打开 `小实验 -> 快速查资料`，搜索：
+1. `XUEMATE_CLOUD_FAST_MODE=true`：默认开启快搜模式。
+2. 编程学习场景优先走稳定候选源：Python/冒泡排序会直接加入菜鸟教程、博客园、慕课、SegmentFault 等候选。
+3. SearXNG 单次超时压到 `2500ms`，避免被上游搜索源拖慢。
+4. Crawl4AI 超时压到 `6500ms`。
+5. 网页正文抽取从串行改为并发，默认并发度 `4`。
+6. Gateway 缓存命中后通常几十毫秒返回。
 
-```txt
-小学生冒泡排序动画讲解
-```
+实测服务器 `100.70.188.115`：
 
-看到 `云端网络资源分析` 标签，就说明已经走云端。
+| 查询 | 优化前 | 优化后首查 | 缓存命中 |
+|---|---:|---:|---:|
+| 小学生 Python 冒泡排序 动画课程 | 34-75s | 约 2.2s | 约 30ms |

@@ -21,6 +21,7 @@ export function useKnowledgeGraphRenderer(props) {
   const graphCanvasReady = ref(false)
   const renderStage = ref('等待渲染')
   const renderError = ref('')
+  const subgraphRootId = ref('')
 
   let graph = null
   let renderer = null
@@ -56,7 +57,22 @@ export function useKnowledgeGraphRenderer(props) {
     if (props.error) return '生成失败，点刷新重试'
     if (!props.graphData) return '等待资料数据'
     if (!hasGraph.value) return '资料太少，暂时没有形成网络'
+    if (subgraphRootId.value) {
+      const root = (props.graphData?.nodes || []).find((node) => node.id === subgraphRootId.value)
+      return `子图谱：${root?.label || '当前节点'} · ${getSubgraphNodeSet()?.size || 0} 个节点`
+    }
     return `${props.graphData.stats?.nodeCount || 0} 个节点 · ${props.graphData.stats?.edgeCount || 0} 条关系`
+  })
+
+  const isSubgraphMode = computed(() => Boolean(subgraphRootId.value))
+
+  const subgraphTitle = computed(() => {
+    if (!subgraphRootId.value) return ''
+    const root =
+      selectedNode.value?.id === subgraphRootId.value
+        ? selectedNode.value
+        : (props.graphData?.nodes || []).find((node) => node.id === subgraphRootId.value)
+    return root?.label || '当前节点'
   })
 
   const legendItems = computed(() => {
@@ -85,6 +101,7 @@ export function useKnowledgeGraphRenderer(props) {
       selectedNode.value = null
       selectedLinks.value = []
       activeType.value = 'all'
+      subgraphRootId.value = ''
       graphCanvasReady.value = false
       await nextTick()
       scheduleRender(120)
@@ -94,6 +111,14 @@ export function useKnowledgeGraphRenderer(props) {
 
   watch(activeType, () => refreshReducers())
   watch(selectedNode, () => refreshReducers())
+  watch(subgraphRootId, () => {
+    refreshReducers()
+    if (renderer) {
+      requestAnimationFrame(() => {
+        fitGraph(true)
+      })
+    }
+  })
 
   function graphSignature() {
     const nodes = props.graphData?.nodes || []
@@ -227,6 +252,7 @@ export function useKnowledgeGraphRenderer(props) {
     renderError.value = ''
     selectedNode.value = null
     selectedLinks.value = []
+    subgraphRootId.value = ''
   }
 
   function graphNodePosition(index, total, type) {
@@ -262,7 +288,7 @@ export function useKnowledgeGraphRenderer(props) {
 
     const signature = graphSignature()
     if (renderer && signature === lastRenderedSignature) {
-      applyGraphViewportPadding()
+      applyGraphViewportPadding(getSubgraphNodeSet())
       renderer.refresh()
       graphCanvasReady.value = true
       return
@@ -342,7 +368,10 @@ export function useKnowledgeGraphRenderer(props) {
       })
       applyGraphViewportPadding()
 
-      renderer.on('clickNode', ({ node }) => selectNode(node, true))
+      renderer.on('clickNode', ({ node }) => {
+        if (subgraphRootId.value) enterSubgraph(node)
+        else selectNode(node, true)
+      })
       renderer.on('clickStage', () => {
         selectedNode.value = null
         selectedLinks.value = []
@@ -371,15 +400,21 @@ export function useKnowledgeGraphRenderer(props) {
     const validSelectedId = selectedId && graph.hasNode(selectedId) ? selectedId : ''
     const selectedNeighbors = new Set(validSelectedId ? graph.neighbors(validSelectedId) : [])
     const filterType = activeType.value
+    const visibleSet = getSubgraphNodeSet()
 
     renderer.setSetting('nodeReducer', (node, data) => {
       const next = { ...data }
-      const typeVisible = filterType === 'all' || data.nodeKind === filterType
+      if (visibleSet && !visibleSet.has(node)) {
+        next.hidden = true
+        return next
+      }
+      const isSubgraphRoot = visibleSet && node === subgraphRootId.value
+      const typeVisible = filterType === 'all' || data.nodeKind === filterType || isSubgraphRoot
       if (!typeVisible) {
         next.hidden = true
         return next
       }
-      if (validSelectedId && node !== validSelectedId && !selectedNeighbors.has(node)) {
+      if (!visibleSet && validSelectedId && node !== validSelectedId && !selectedNeighbors.has(node)) {
         next.color = '#d4d4d8'
         next.label = ''
         next.size = Math.max(3, data.size * 0.62)
@@ -395,11 +430,15 @@ export function useKnowledgeGraphRenderer(props) {
 
     renderer.setSetting('edgeReducer', (edge, data) => {
       const extremities = graph.extremities(edge)
+      if (visibleSet && extremities.some((node) => !visibleSet.has(node))) {
+        return { ...data, hidden: true }
+      }
       const visibleByType =
         filterType === 'all' ||
+        extremities.includes(subgraphRootId.value) ||
         extremities.some((node) => graph.getNodeAttribute(node, 'nodeKind') === filterType)
       if (!visibleByType) return { ...data, hidden: true }
-      if (validSelectedId && !extremities.includes(validSelectedId)) {
+      if (!visibleSet && validSelectedId && !extremities.includes(validSelectedId)) {
         return { ...data, color: 'rgba(185, 217, 162, 0.24)', size: 0.4 }
       }
       return data
@@ -418,21 +457,67 @@ export function useKnowledgeGraphRenderer(props) {
       .map((edge) => {
         const otherId = edge.source === nodeId ? edge.target : edge.source
         const other = props.graphData.nodes.find((item) => item.id === otherId)
-        return { ...edge, otherLabel: other?.label || otherId, otherType: other?.type || 'concept' }
+        return {
+          ...edge,
+          otherId,
+          otherLabel: other?.label || otherId,
+          otherType: other?.type || 'concept',
+          otherMeta: other?.meta || {}
+        }
       })
 
     if (moveCamera && renderer) {
-      renderer.getCamera().animate({ x: attrs.x, y: attrs.y, ratio: 0.42 }, { duration: 420 })
+      const visibleSet = getSubgraphNodeSet()
+      applyGraphViewportPadding(visibleSet)
+      const target = normalizeGraphPoint({ x: attrs.x, y: attrs.y }, visibleSet)
+      renderer.getCamera().animate(
+        { x: target.x, y: target.y, ratio: visibleSet ? 0.58 : 0.42 },
+        { duration: 420 }
+      )
     }
   }
 
-  function graphBoundsWithPadding(paddingRatio = 0.18) {
+  function getSortedNeighbors(nodeId, limit = 36) {
+    if (!graph?.hasNode(nodeId)) return []
+    return graph
+      .neighbors(nodeId)
+      .sort((a, b) => {
+        const scoreA = Number(graph.getNodeAttribute(a, 'raw')?.score || 0)
+        const scoreB = Number(graph.getNodeAttribute(b, 'raw')?.score || 0)
+        return scoreB - scoreA
+      })
+      .slice(0, limit)
+  }
+
+  function getSubgraphNodeSet(rootId = subgraphRootId.value) {
+    if (!rootId || !graph?.hasNode(rootId)) return null
+    const visible = new Set([rootId])
+    const firstHop = getSortedNeighbors(rootId, 42)
+    for (const node of firstHop) visible.add(node)
+
+    const rootKind = graph.getNodeAttribute(rootId, 'nodeKind')
+    const secondHopLimit = rootKind === 'collection' ? 64 : 54
+    for (const node of firstHop) {
+      if (visible.size >= secondHopLimit) break
+      const nodeKind = graph.getNodeAttribute(node, 'nodeKind')
+      if (!['document', 'chunk', 'concept'].includes(nodeKind)) continue
+      for (const next of getSortedNeighbors(node, 12)) {
+        if (visible.size >= secondHopLimit) break
+        visible.add(next)
+      }
+    }
+    return visible
+  }
+
+  function graphBoundsWithPadding(paddingRatio = 0.18, nodeSet = null) {
     if (!graph || graph.order === 0) return null
     let minX = Infinity
     let maxX = -Infinity
     let minY = Infinity
     let maxY = -Infinity
+    let count = 0
     graph.forEachNode((node) => {
+      if (nodeSet && !nodeSet.has(node)) return
       const attrs = graph.getNodeAttributes(node)
       const x = Number(attrs.x || 0)
       const y = Number(attrs.y || 0)
@@ -440,8 +525,9 @@ export function useKnowledgeGraphRenderer(props) {
       maxX = Math.max(maxX, x)
       minY = Math.min(minY, y)
       maxY = Math.max(maxY, y)
+      count += 1
     })
-    if (![minX, maxX, minY, maxY].every(Number.isFinite)) return null
+    if (count === 0 || ![minX, maxX, minY, maxY].every(Number.isFinite)) return null
 
     const dx = Math.max(0.2, maxX - minX)
     const dy = Math.max(0.2, maxY - minY)
@@ -457,20 +543,37 @@ export function useKnowledgeGraphRenderer(props) {
     }
   }
 
-  function applyGraphViewportPadding() {
+  function applyGraphViewportPadding(nodeSet = null) {
     if (!renderer || !graph) return
-    const bounds = graphBoundsWithPadding()
+    const bounds = graphBoundsWithPadding(0.18, nodeSet)
     if (!bounds) return
     renderer.setCustomBBox({ x: bounds.x, y: bounds.y })
   }
 
+  function normalizeGraphPoint(point, nodeSet = null) {
+    const bounds = graphBoundsWithPadding(0.18, nodeSet)
+    if (!bounds) return { x: 0.5, y: 0.5 }
+
+    const minX = bounds.x[0]
+    const maxX = bounds.x[1]
+    const minY = bounds.y[0]
+    const maxY = bounds.y[1]
+    const ratio = Math.max(maxX - minX, maxY - minY) || 1
+    const centerX = (maxX + minX) / 2
+    const centerY = (maxY + minY) / 2
+    return {
+      x: 0.5 + (Number(point.x || 0) - centerX) / ratio,
+      y: 0.5 + (Number(point.y || 0) - centerY) / ratio
+    }
+  }
+
   function fitGraph(animate = true) {
     if (!renderer) return
-    applyGraphViewportPadding()
-    const bounds = graphBoundsWithPadding()
+    const visibleSet = getSubgraphNodeSet()
+    applyGraphViewportPadding(visibleSet)
     const state = {
-      x: bounds?.center.x || 0,
-      y: bounds?.center.y || 0,
+      x: 0.5,
+      y: 0.5,
       ratio: 1,
       angle: 0
     }
@@ -486,7 +589,25 @@ export function useKnowledgeGraphRenderer(props) {
       const meta = node.meta ? JSON.stringify(node.meta).toLowerCase() : ''
       return `${node.label} ${meta}`.toLowerCase().includes(keyword)
     })
-    if (found) selectNode(found.id, true)
+    if (found) {
+      if (subgraphRootId.value && !getSubgraphNodeSet()?.has(found.id)) {
+        subgraphRootId.value = ''
+      }
+      selectNode(found.id, true)
+    }
+  }
+
+  function enterSubgraph(nodeId = selectedNode.value?.id) {
+    if (!nodeId || !graph?.hasNode(nodeId)) return
+    subgraphRootId.value = nodeId
+    if (selectedNode.value?.id !== nodeId) selectNode(nodeId, false)
+    requestAnimationFrame(() => fitGraph(true))
+  }
+
+  function exitSubgraph() {
+    if (!subgraphRootId.value) return
+    subgraphRootId.value = ''
+    requestAnimationFrame(() => fitGraph(true))
   }
 
   function formatPercent(value) {
@@ -508,6 +629,9 @@ export function useKnowledgeGraphRenderer(props) {
     graphCanvasReady,
     renderStage,
     renderError,
+    subgraphRootId,
+    isSubgraphMode,
+    subgraphTitle,
     typeConfig,
     hasGraph,
     graphStatusText,
@@ -515,6 +639,8 @@ export function useKnowledgeGraphRenderer(props) {
     searchPlaceholder,
     searchNode,
     selectNode,
+    enterSubgraph,
+    exitSubgraph,
     fitGraph,
     formatPercent,
     formatDate

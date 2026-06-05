@@ -21,6 +21,13 @@ export interface QuickSearchResult {
   sources: QuickSearchSource[]
 }
 
+type QuickSearchMode = 'local' | 'cloud'
+
+function getQuickSearchMode(): QuickSearchMode {
+  const configured = (process.env.XUEMATE_QUICK_SEARCH_MODE || 'local').trim().toLowerCase()
+  return configured === 'cloud' ? 'cloud' : 'local'
+}
+
 export async function quickSearch(query: string): Promise<QuickSearchResult> {
   const normalized = query.trim()
   if (!normalized) throw new Error('请输入要查的内容')
@@ -30,8 +37,10 @@ export async function quickSearch(query: string): Promise<QuickSearchResult> {
     throw new Error(unsafe)
   }
 
-  const cloudBaseUrl = getCloudBaseUrl()
-  if (cloudBaseUrl) {
+  const searchMode = getQuickSearchMode()
+  const cloudBaseUrl = searchMode === 'cloud' ? getCloudBaseUrl() : null
+
+  if (searchMode === 'cloud' && cloudBaseUrl) {
     try {
       const cloudResult = await searchCloudLearningResources(normalized, 4)
       if (cloudResult) {
@@ -57,6 +66,10 @@ export async function quickSearch(query: string): Promise<QuickSearchResult> {
     }
   }
 
+  return quickSearchLocal(normalized)
+}
+
+async function quickSearchLocal(normalized: string): Promise<QuickSearchResult> {
   const pages = await searchAndFetch(normalized)
   const sources = pages.slice(0, 4).map((page) => ({
     title: page.title || '网页',
