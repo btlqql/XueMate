@@ -1,127 +1,161 @@
 {
-  "generatedAt": "2026-06-05T14:50:42.820Z",
+  "generatedAt": "2026-06-05T15:21:01.287Z",
   "bridgeUrl": "http://127.0.0.1:8788",
   "gatewayBinary": "/Users/wangyue/wangyue/XueMate/mcp-gateway-rs/target/release/xuemate-mcp-gateway",
   "cacheTtlMs": 15000,
+  "bridgeCacheTtlMs": 30000,
   "warmup": 2,
   "samples": 8,
   "results": [
     {
       "label": "health",
-      "direct": {
+      "directCold": {
         "samples": 8,
-        "avgMs": 0.41,
-        "minMs": 0.32,
-        "p50Ms": 0.37,
-        "p95Ms": 0.63,
-        "maxMs": 0.63
+        "avgMs": 0.4,
+        "minMs": 0.24,
+        "p50Ms": 0.36,
+        "p95Ms": 0.71,
+        "maxMs": 0.71
       },
+      "directCached": null,
       "mcpCold": {
         "samples": 8,
         "avgMs": 0.24,
-        "minMs": 0.17,
-        "p50Ms": 0.21,
-        "p95Ms": 0.42,
-        "maxMs": 0.42
+        "minMs": 0.14,
+        "p50Ms": 0.23,
+        "p95Ms": 0.38,
+        "maxMs": 0.38
       },
       "mcpCached": null,
-      "overheadMs": -0.17,
-      "overheadPct": -41.5,
-      "cacheSpeedupMs": null,
-      "cacheSpeedupPct": null
+      "overheadMs": -0.16,
+      "overheadPct": -40,
+      "bridgeCacheSpeedupMs": null,
+      "bridgeCacheSpeedupPct": null,
+      "mcpCacheSpeedupMs": null,
+      "mcpCacheSpeedupPct": null
     },
     {
       "label": "rag.collections",
-      "direct": {
+      "directCold": {
         "samples": 8,
-        "avgMs": 0.3,
-        "minMs": 0.21,
-        "p50Ms": 0.24,
-        "p95Ms": 0.44,
-        "maxMs": 0.44
+        "avgMs": 0.21,
+        "minMs": 0.16,
+        "p50Ms": 0.21,
+        "p95Ms": 0.25,
+        "maxMs": 0.25
+      },
+      "directCached": {
+        "samples": 8,
+        "avgMs": 0.26,
+        "minMs": 0.14,
+        "p50Ms": 0.17,
+        "p95Ms": 0.69,
+        "maxMs": 0.69
       },
       "mcpCold": {
         "samples": 8,
-        "avgMs": 0.26,
-        "minMs": 0.17,
-        "p50Ms": 0.23,
-        "p95Ms": 0.4,
-        "maxMs": 0.4
+        "avgMs": 0.19,
+        "minMs": 0.16,
+        "p50Ms": 0.18,
+        "p95Ms": 0.23,
+        "maxMs": 0.23
       },
       "mcpCached": {
         "samples": 8,
-        "avgMs": 0.06,
-        "minMs": 0.05,
-        "p50Ms": 0.06,
+        "avgMs": 0.05,
+        "minMs": 0.03,
+        "p50Ms": 0.04,
         "p95Ms": 0.07,
         "maxMs": 0.07
       },
-      "overheadMs": -0.04,
-      "overheadPct": -13.3,
-      "cacheSpeedupMs": 0.2,
-      "cacheSpeedupPct": 76.9
+      "overheadMs": -0.02,
+      "overheadPct": -9.5,
+      "bridgeCacheSpeedupMs": -0.05,
+      "bridgeCacheSpeedupPct": -23.8,
+      "mcpCacheSpeedupMs": 0.14,
+      "mcpCacheSpeedupPct": 73.7
     },
     {
       "label": "learningGraph.default",
-      "direct": {
+      "directCold": {
         "samples": 8,
-        "avgMs": 12.27,
-        "minMs": 11.41,
-        "p50Ms": 11.78,
-        "p95Ms": 15.67,
-        "maxMs": 15.67
+        "avgMs": 11.93,
+        "minMs": 10.96,
+        "p50Ms": 11.16,
+        "p95Ms": 14.32,
+        "maxMs": 14.32
+      },
+      "directCached": {
+        "samples": 8,
+        "avgMs": 0.74,
+        "minMs": 0.59,
+        "p50Ms": 0.71,
+        "p95Ms": 1.1,
+        "maxMs": 1.1
       },
       "mcpCold": {
         "samples": 8,
-        "avgMs": 13.5,
-        "minMs": 11.93,
-        "p50Ms": 12.22,
-        "p95Ms": 19.98,
-        "maxMs": 19.98
+        "avgMs": 12.75,
+        "minMs": 11.45,
+        "p50Ms": 11.59,
+        "p95Ms": 20.77,
+        "maxMs": 20.77
       },
       "mcpCached": {
         "samples": 8,
         "avgMs": 0.73,
         "minMs": 0.64,
-        "p50Ms": 0.69,
-        "p95Ms": 0.95,
-        "maxMs": 0.95
+        "p50Ms": 0.71,
+        "p95Ms": 0.94,
+        "maxMs": 0.94
       },
-      "overheadMs": 1.23,
-      "overheadPct": 10,
-      "cacheSpeedupMs": 12.77,
-      "cacheSpeedupPct": 94.6
+      "overheadMs": 0.82,
+      "overheadPct": 6.9,
+      "bridgeCacheSpeedupMs": 11.19,
+      "bridgeCacheSpeedupPct": 93.8,
+      "mcpCacheSpeedupMs": 12.02,
+      "mcpCacheSpeedupPct": 94.3
     },
     {
       "label": "rag.retrieve",
-      "direct": {
+      "directCold": {
         "samples": 8,
-        "avgMs": 471.62,
-        "minMs": 326.62,
-        "p50Ms": 480.16,
-        "p95Ms": 545.16,
-        "maxMs": 545.16
+        "avgMs": 724.06,
+        "minMs": 516.63,
+        "p50Ms": 686.02,
+        "p95Ms": 965.66,
+        "maxMs": 965.66
+      },
+      "directCached": {
+        "samples": 8,
+        "avgMs": 0.94,
+        "minMs": 0.76,
+        "p50Ms": 0.85,
+        "p95Ms": 1.44,
+        "maxMs": 1.44
       },
       "mcpCold": {
         "samples": 8,
-        "avgMs": 428.9,
-        "minMs": 311.4,
-        "p50Ms": 427.5,
-        "p95Ms": 563.14,
-        "maxMs": 563.14
+        "avgMs": 642.18,
+        "minMs": 498.07,
+        "p50Ms": 620.37,
+        "p95Ms": 945.41,
+        "maxMs": 945.41
       },
       "mcpCached": {
         "samples": 8,
-        "avgMs": 1.35,
-        "minMs": 0.92,
-        "p50Ms": 1.21,
-        "p95Ms": 1.99,
-        "maxMs": 1.99
+        "avgMs": 0.83,
+        "minMs": 0.72,
+        "p50Ms": 0.76,
+        "p95Ms": 1.09,
+        "maxMs": 1.09
       },
-      "overheadMs": -42.72,
-      "overheadPct": -9.1,
-      "cacheSpeedupMs": 427.55,
-      "cacheSpeedupPct": 99.7
+      "overheadMs": -81.88,
+      "overheadPct": -11.3,
+      "bridgeCacheSpeedupMs": 723.12,
+      "bridgeCacheSpeedupPct": 99.9,
+      "mcpCacheSpeedupMs": 641.35,
+      "mcpCacheSpeedupPct": 99.9
     }
   ]
 }

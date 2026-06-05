@@ -263,7 +263,12 @@ impl Gateway {
             }
         }
 
-        let value = self.get(path).await?;
+        let fetch_path = if use_cache {
+            path.to_string()
+        } else {
+            with_no_cache_query(path)
+        };
+        let value = self.get(&fetch_path).await?;
         if use_cache {
             self.cache_put(key, &value).await;
         }
@@ -278,7 +283,12 @@ impl Gateway {
             }
         }
 
-        let value = self.post(path, body).await?;
+        let fetch_body = if use_cache {
+            body
+        } else {
+            with_no_cache_body(body)
+        };
+        let value = self.post(path, fetch_body).await?;
         if use_cache {
             self.cache_put(key, &value).await;
         }
@@ -359,6 +369,24 @@ fn strip_gateway_options(mut args: Value) -> Value {
     args
 }
 
+fn with_no_cache_query(path: &str) -> String {
+    if path.contains('?') {
+        format!("{path}&noCache=1")
+    } else {
+        format!("{path}?noCache=1")
+    }
+}
+
+fn with_no_cache_body(mut body: Value) -> Value {
+    match &mut body {
+        Value::Object(map) => {
+            map.insert("noCache".to_string(), Value::Bool(true));
+            body
+        }
+        _ => json!({ "noCache": true }),
+    }
+}
+
 fn url_encode(value: &str) -> String {
     let mut out = String::new();
     for byte in value.bytes() {
@@ -390,17 +418,17 @@ fn tools() -> Value {
         {
             "name": "xuemate.rag.collections",
             "description": "列出 XueMate 知识库资料夹。",
-            "inputSchema": schema(map([("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
+            "inputSchema": schema(map([("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.rag.documents",
             "description": "列出指定资料夹中的文档。",
-            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "default" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
+            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "default" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.rag.stats",
             "description": "读取指定资料夹的 RAG 文档/片段统计。",
-            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
+            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.rag.retrieve",
@@ -414,18 +442,18 @@ fn tools() -> Value {
                 ("useMmr", json!({ "type": "boolean", "default": true })),
                 ("includeContext", json!({ "type": "boolean", "default": true })),
                 ("maxChars", json!({ "type": "integer", "default": 3600, "minimum": 500, "maximum": 12000 })),
-                ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))
+                ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))
             ]), vec!["query"])
         },
         {
             "name": "xuemate.learningGraph.get",
             "description": "生成资料、知识点、记忆和复习任务融合后的学习图谱。",
-            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
+            "inputSchema": schema(map([("collectionId", json!({ "type": "string", "default": "all" })), ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.memory.get",
             "description": "读取学生长期记忆、学习画像、薄弱点和系统提示词。",
-            "inputSchema": schema(map([("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 本轮内存缓存。" }))]), vec![])
+            "inputSchema": schema(map([("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))]), vec![])
         },
         {
             "name": "xuemate.quickSearch.run",

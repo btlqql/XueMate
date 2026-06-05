@@ -35,6 +35,22 @@ XUEMATE_RENDERER_BRIDGE_URL=http://127.0.0.1:8788 \
 
 当前是 stdio MCP server。stdout 只输出 JSON-RPC/MCP 响应，日志走 stderr。
 
+### Electron bridge 二级缓存
+
+Electron main 的 `rendererBridge` 现在也有一层 TTL + LRU 二级缓存，先在本地 bridge 命中，减少 RAG / 图谱 / 记忆的重复计算：
+
+```txt
+默认 TTL：30000ms
+默认最大条目：128
+关闭缓存：XUEMATE_BRIDGE_CACHE=off
+调整 TTL：XUEMATE_BRIDGE_CACHE_TTL_MS=60000
+调整容量：XUEMATE_BRIDGE_CACHE_MAX_ENTRIES=256
+单次跳过：?noCache=1 或 body.noCache=true
+调试：GET /api/cache/stats、POST /api/cache/clear
+```
+
+`POST /api/quick-search/run` 不缓存，保持真实网络搜索。RAG 写入/删除资料后会主动清空 bridge cache 与 vector index，避免脏读。
+
 ### 调用缓存
 
 Gateway 内置进程内 TTL 缓存，用来复用短时间内重复的只读工具调用：
@@ -87,6 +103,8 @@ POST /api/rag/retrieve
 GET  /api/memory
 GET  /api/memory/archive?module=topics|weak|strong
 POST /api/quick-search/run
+GET  /api/cache/stats
+POST /api/cache/clear
 ```
 
 ### MCP tools
@@ -141,9 +159,10 @@ npm run bench:mcp
 
 对比口径：
 
-- Direct HTTP：benchmark 直接请求 Electron `rendererBridge`。
-- MCP cold：benchmark 通过 stdio JSON-RPC 调 Rust MCP Gateway，并传 `noCache=true` 跳过 Gateway 缓存。
-- MCP cached：同一个 Gateway 进程内重复调用同一 tool，命中 TTL 缓存。
+- Direct cold：benchmark 直接请求 Electron `rendererBridge`，并传 `noCache=true` 跳过 bridge 缓存。
+- Direct bridge cached：benchmark 直接请求 Electron `rendererBridge`，命中 bridge 二级缓存。
+- MCP cold：benchmark 通过 stdio JSON-RPC 调 Rust MCP Gateway，并传 `noCache=true` 跳过 Gateway 与 bridge 缓存。
+- MCP cached：同一个 Gateway 进程内重复调用同一 tool，命中 Gateway TTL 缓存。
 - 不使用 mock，读取本地真实 SQLite、真实 RAG、真实图谱服务。
 
 ## 结论
