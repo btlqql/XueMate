@@ -84,22 +84,24 @@ const send = () => {
 .chat-input-bar {
   padding: 12px 20px 16px;
   border-top: 1px solid var(--xm-border);
-  background: white;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .chat-input-wrap {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  background: #f7f7f7;
-  border: 2px solid #e5e5e5;
+  background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: 16px;
   padding: 8px 8px 8px 16px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
 .chat-input-wrap:focus-within {
   border-color: var(--xm-green);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(88, 204, 2, 0.12);
 }
 
 .chat-textarea {
@@ -113,11 +115,11 @@ const send = () => {
   outline: none;
   max-height: 120px;
   padding: 4px 0;
-  color: #333;
+  color: var(--xm-text);
 }
 
 .chat-textarea::placeholder {
-  color: #aaa;
+  color: var(--xm-text-muted);
 }
 
 .chat-send-btn {
@@ -132,9 +134,8 @@ const send = () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition:
-    opacity 0.2s,
-    transform 0.1s;
+  box-shadow: 0 3px 0 var(--xm-green-dark);
+  transition: opacity 0.2s, transform 0.1s, box-shadow 0.1s;
 }
 
 .chat-send-btn:hover:not(:disabled) {
@@ -144,6 +145,7 @@ const send = () => {
 
 .chat-send-btn:disabled {
   background: #d1d5db;
+  box-shadow: none;
   cursor: not-allowed;
 }
 </style>

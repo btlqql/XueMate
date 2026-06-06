@@ -96,7 +96,7 @@ watch(
   <div class="fade-in agent-view">
     <div class="page-header">
       <h1 class="page-title">小实验</h1>
-      <p class="page-desc">这里有两个能力：直接查资料，或者让学伴一步一步操作网页</p>
+      <p class="page-desc">一个适合快速找资料，一个适合边看网页边操作</p>
     </div>
 
     <div class="mode-tabs">
@@ -107,8 +107,8 @@ watch(
       >
         <span class="mode-icon">🔎</span>
         <span>
-          <strong>快速查资料</strong>
-          <small>直接找答案，不点网页</small>
+          <strong>查资料</strong>
+          <small>先看一版整理结果</small>
         </span>
       </button>
       <button
@@ -118,8 +118,8 @@ watch(
       >
         <span class="mode-icon">🖱️</span>
         <span>
-          <strong>操作网页</strong>
-          <small>看实时网页，帮你点击输入</small>
+          <strong>看网页</strong>
+          <small>打开网页后一步步处理</small>
         </span>
       </button>
     </div>
@@ -180,8 +180,8 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   padding: 14px 16px;
   background: var(--xm-surface);
   text-align: left;
@@ -192,7 +192,7 @@ watch(
 .agent-view .mode-tab.active {
   border-color: var(--xm-green);
   background: #f0fdf4;
-  box-shadow: 0 3px 0 #d9f6cc;
+  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
 }
 
 .agent-view .mode-icon {
@@ -201,7 +201,7 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--xm-radius);
+  border-radius: 10px;
   background: var(--xm-surface-soft);
   font-size: 21px;
   flex-shrink: 0;
@@ -249,7 +249,7 @@ watch(
 }
 
 .agent-view .live-browser-card {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--xm-shadow);
 }
 
 .agent-view .control-title-row,
@@ -473,10 +473,11 @@ watch(
 .agent-view .summary-box {
   white-space: pre-wrap;
   padding: 14px;
-  border-radius: var(--xm-radius);
+  border-radius: var(--xm-radius-sm);
   line-height: 1.6;
   font-size: 15px;
   font-weight: 700;
+  border: 1px solid rgba(22, 101, 52, 0.12);
 }
 
 .agent-view .summary-box.small {
@@ -541,7 +542,8 @@ watch(
   gap: 8px;
   padding: 7px 10px;
   border-radius: var(--xm-radius-sm);
-  background: #f8fafc;
+  background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   color: #475569;
   font-size: 12px;
 }
@@ -615,7 +617,14 @@ watch(
   padding: 10px 12px;
   border-radius: var(--xm-radius-sm);
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.agent-view .source-item:hover {
+  border-color: var(--xm-blue);
+  background: #f0f9ff;
 }
 
 .agent-view .source-item strong {
@@ -699,8 +708,8 @@ watch(
 
 .agent-view .live-browser-box {
   margin-top: 12px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   overflow: hidden;
   background: var(--xm-surface);
   height: clamp(320px, 46vh, 520px);

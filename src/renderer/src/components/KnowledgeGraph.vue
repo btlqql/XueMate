@@ -108,13 +108,13 @@ function changeScope(scopeId) {
   <div class="graph-card">
     <div class="graph-header">
       <div>
-        <div class="eyebrow">学习图谱 · Sigma.js</div>
+        <div class="eyebrow">资料关系</div>
         <h2 class="section-title">学习网络 · {{ scopeName }}</h2>
-        <p class="graph-desc">把资料、知识点、学习画像和复习任务连起来；可以进入单个图谱，也可以回到全部图谱。</p>
+        <p class="graph-desc">看看资料、知识点和复习任务之间是怎么连起来的。</p>
         <p class="graph-status">{{ graphStatusText }}</p>
       </div>
       <button class="btn btn-secondary" :disabled="loading" @click="emit('refresh')">
-        {{ loading ? '生成中...' : '刷新图谱' }}
+        {{ loading ? '整理中...' : '刷新' }}
       </button>
     </div>
 
@@ -260,7 +260,7 @@ function changeScope(scopeId) {
             {{ locateButtonText }}
           </button>
           <div v-if="articleTarget" class="article-hint">
-            <strong>可定位资料</strong>
+            <strong>对应资料</strong>
             <p>{{ articleTarget.fileName }}</p>
             <span v-if="articleTarget.startPos !== undefined">
               片段位置：{{ articleTarget.startPos }} - {{ articleTarget.endPos }}
@@ -302,15 +302,15 @@ function changeScope(scopeId) {
         <template v-else>
           <div class="empty-panel-icon">✦</div>
           <h3>点击一个节点</h3>
-          <p class="node-desc">可以查看它来自哪份资料、关联哪些知识点，以及学生在哪些地方薄弱。</p>
+          <p class="node-desc">可以查看它来自哪份资料、和哪些知识点放在一起。</p>
         </template>
       </aside>
     </div>
 
     <div v-else-if="!loading" class="graph-empty">
       <div class="empty-planet">✦</div>
-      <h3>导入资料后会自动长出学习网络</h3>
-      <p>至少需要一份资料，系统会抽取知识点并和学习画像、复习队列连接。</p>
+      <h3>导入资料后，这里会出现关系图</h3>
+      <p>先放一份课件或笔记，再回到这里查看它和知识点的关系。</p>
     </div>
   </div>
 </template>
@@ -318,11 +318,11 @@ function changeScope(scopeId) {
 <style scoped>
 .graph-card {
   background: white;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   padding: 18px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(88, 204, 2, 0.06);
+  box-shadow: var(--xm-shadow-sm);
 }
 
 .graph-header {
@@ -374,7 +374,7 @@ function changeScope(scopeId) {
 
 .graph-stat {
   padding: 10px 12px;
-  border-radius: var(--xm-radius);
+  border-radius: var(--xm-radius-sm);
   background: #f7fbf3;
   border: 1px solid #e1f1d7;
 }
@@ -411,8 +411,8 @@ function changeScope(scopeId) {
   display: flex;
   align-items: center;
   min-width: 280px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   overflow: hidden;
   background: #fff;
 }
@@ -532,9 +532,9 @@ function changeScope(scopeId) {
   width: 100%;
   height: 480px;
   min-height: 480px;
-  border-radius: var(--xm-radius-lg);
+  border-radius: var(--xm-radius-sm);
   overflow: hidden;
-  border: 2px solid var(--xm-border);
+  border: 1px solid var(--xm-border);
   background:
     radial-gradient(circle at 26% 22%, rgba(88, 204, 2, 0.12), transparent 30%),
     radial-gradient(circle at 76% 30%, rgba(255, 200, 0, 0.13), transparent 30%),
@@ -626,8 +626,8 @@ function changeScope(scopeId) {
 
 .node-panel {
   border: 1px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
-  background: var(--xm-surface-soft);
+  border-radius: var(--xm-radius-sm);
+  background: #fbfdff;
   padding: 14px;
   overflow: auto;
 }
@@ -797,7 +797,7 @@ function changeScope(scopeId) {
 .graph-empty {
   min-height: 220px;
   border: 1px dashed #b9d9a2;
-  border-radius: var(--xm-radius-lg);
+  border-radius: var(--xm-radius-sm);
   background: var(--xm-surface-soft);
   display: flex;
   flex-direction: column;
@@ -819,7 +819,7 @@ function changeScope(scopeId) {
 .graph-loading {
   min-height: 220px;
   border: 1px dashed #b9d9a2;
-  border-radius: var(--xm-radius-lg);
+  border-radius: var(--xm-radius-sm);
   background: #f7fbf3;
   display: flex;
   align-items: center;

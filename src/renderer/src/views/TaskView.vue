@@ -106,7 +106,7 @@ const deleteTask = async (task) => {
   <div class="fade-in">
     <div class="page-header">
       <h1 class="page-title">任务解析</h1>
-      <p class="page-desc">粘贴作业要求，自动提取关键信息，生成待办清单</p>
+      <p class="page-desc">把通知或作业要求贴进来，整理成清楚的待办事项</p>
     </div>
 
     <div class="task-layout">
@@ -120,7 +120,7 @@ const deleteTask = async (task) => {
         ></textarea>
         <div class="button-group">
           <button class="btn btn-primary" @click="parseTask" :disabled="loading">
-            {{ loading ? '解析中...' : '开始解析' }}
+            {{ loading ? '整理中...' : '整理任务' }}
           </button>
           <button class="btn btn-outline" @click="loadSample">示例</button>
         </div>
@@ -175,7 +175,7 @@ const deleteTask = async (task) => {
       </div>
 
       <div class="card empty-state" v-else-if="!loading">
-        <p>还没有任务，粘贴作业要求开始解析吧</p>
+        <p>还没有待办。把作业通知贴进来，就能整理成清单。</p>
       </div>
     </div>
   </div>
@@ -205,8 +205,9 @@ const deleteTask = async (task) => {
   align-items: flex-start;
   gap: 14px;
   padding: 16px 20px;
-  background: var(--xm-surface-soft);
-  border-radius: var(--xm-radius);
+  background: #fbfdff;
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   transition: background 0.15s;
 }
 
@@ -223,7 +224,7 @@ const deleteTask = async (task) => {
 .task-check {
   width: 28px;
   height: 28px;
-  border: 3px solid var(--xm-border);
+  border: 2px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   display: flex;
   align-items: center;
@@ -258,12 +259,17 @@ const deleteTask = async (task) => {
 }
 
 .task-delete {
-  background: none;
-  border: none;
+  background: white;
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   cursor: pointer;
-  padding: 4px;
+  padding: 5px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.task-delete:hover {
+  background: var(--xm-danger-bg);
 }
 
 .task-item:hover .task-delete {
@@ -291,6 +297,7 @@ const deleteTask = async (task) => {
   gap: 10px;
   padding: 12px 14px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   font-size: 15px;
   font-weight: 600;

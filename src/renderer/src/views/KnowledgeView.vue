@@ -128,7 +128,7 @@ async function locateDocument(source) {
   <div class="fade-in">
     <div class="page-header">
       <h1 class="page-title">我的资料</h1>
-      <p class="page-desc">把课件、笔记、作业放进来，学伴回答时会先看这些资料</p>
+      <p class="page-desc">课件、笔记、作业要求都放在这里，后面查找起来更省事</p>
     </div>
 
     <!-- 资料夹 -->
@@ -136,7 +136,7 @@ async function locateDocument(source) {
       <div class="collection-head">
         <div>
           <h2 class="section-title">资料夹</h2>
-          <p class="collection-desc">按科目分开放，比如语文、数学、英语，这样回答不会串科。</p>
+          <p class="collection-desc">按科目分开放，比如语文、数学、英语，找资料时不容易混在一起。</p>
         </div>
         <form class="create-form" @submit.prevent="createCollection">
           <input
@@ -311,15 +311,15 @@ async function locateDocument(source) {
         <div class="step">
           <span class="step-num">3</span>
           <div>
-            <strong>自动读资料</strong>
-            <p>学伴会把长资料拆成小段，聊天时先找最相关的内容。</p>
+            <strong>整理资料</strong>
+              <p>长资料会按段落整理好，后面提问时更容易找到原文。</p>
           </div>
         </div>
         <div class="step">
           <span class="step-num">4</span>
           <div>
             <strong>聊天时选择资料</strong>
-            <p>聊天页可以选择“全部资料”、某个资料夹，或者“不用资料”。</p>
+              <p>聊天页可以按资料夹提问，也可以临时不用资料。</p>
           </div>
         </div>
       </div>
@@ -353,15 +353,17 @@ async function locateDocument(source) {
 
 .collection-input {
   flex: 1;
-  border: 2px solid var(--xm-border);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   padding: 10px 12px;
   font-size: 14px;
   outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .collection-input:focus {
   border-color: var(--xm-green);
+  box-shadow: 0 0 0 4px rgba(88, 204, 2, 0.12);
 }
 
 .collection-list {
@@ -378,8 +380,8 @@ async function locateDocument(source) {
   gap: 4px;
   min-width: 160px;
   padding: 12px 14px;
-  border-radius: var(--xm-radius);
-  border: 2px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
+  border: 1px solid var(--xm-border);
   background: var(--xm-surface-soft);
   cursor: pointer;
   transition: all 0.15s;
@@ -393,12 +395,12 @@ async function locateDocument(source) {
 .collection-item.active {
   border-color: var(--xm-green);
   background: #edf9ef;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
 }
 
 .collection-name {
   font-weight: 800;
-  color: #222;
+  color: var(--xm-text);
 }
 
 .collection-meta {
@@ -419,8 +421,9 @@ async function locateDocument(source) {
   align-items: center;
   padding: 16px;
   background: white;
-  border-radius: var(--xm-radius);
-  border: 2px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
+  border: 1px solid var(--xm-border);
+  box-shadow: var(--xm-shadow-sm);
 }
 
 .stat-num {
@@ -497,7 +500,7 @@ async function locateDocument(source) {
   margin-top: 10px;
   padding: 12px 14px;
   border: 1px solid #e1f1d7;
-  border-radius: var(--xm-radius-lg);
+  border-radius: var(--xm-radius-sm);
   background: #f7fbf3;
 }
 
@@ -528,8 +531,8 @@ async function locateDocument(source) {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--xm-surface-soft);
-  border: 2px solid transparent;
+  background: #fbfdff;
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   transition:
     border-color 0.18s,
@@ -540,7 +543,7 @@ async function locateDocument(source) {
 .doc-item.located {
   border-color: var(--xm-green);
   background: #edf9ef;
-  box-shadow: 0 8px 22px rgba(88, 204, 2, 0.15);
+  box-shadow: 0 8px 22px rgba(88, 204, 2, 0.12);
 }
 
 .doc-icon {
@@ -553,6 +556,7 @@ async function locateDocument(source) {
   font-weight: 700;
   font-size: 14px;
   margin-bottom: 4px;
+  color: var(--xm-text);
 }
 .doc-meta {
   display: flex;
@@ -576,15 +580,15 @@ async function locateDocument(source) {
 }
 
 .chunk-preview p {
-  color: #666;
+  color: var(--xm-text-light);
   font-size: 12px;
   line-height: 1.55;
 }
 
 .btn-delete {
-  background: none;
-  border: none;
-  color: #ccc;
+  background: white;
+  border: 1px solid var(--xm-border);
+  color: var(--xm-text-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: var(--xm-radius-sm);
@@ -608,6 +612,7 @@ async function locateDocument(source) {
   gap: 12px;
   padding: 10px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
 }
 

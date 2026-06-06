@@ -384,8 +384,8 @@ const {
 
 .tab {
   padding: 10px 22px;
-  border: 2px solid var(--xm-border);
-  background: transparent;
+  border: 1px solid var(--xm-border);
+  background: white;
   border-radius: var(--xm-radius-sm);
   cursor: pointer;
   font-weight: 700;
@@ -398,6 +398,7 @@ const {
   border-color: var(--xm-green);
   background: var(--xm-success-bg);
   color: var(--xm-green-dark);
+  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18);
 }
 
 .code-font {
@@ -430,7 +431,7 @@ const {
 
 .lang-select {
   padding: 6px 14px;
-  border: 2px solid var(--xm-border);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   font-family: var(--xm-font);
   font-weight: 700;
@@ -457,11 +458,11 @@ const {
 
 .problem-card {
   padding: 18px 20px;
-  background: var(--xm-surface-soft);
-  border-radius: var(--xm-radius);
+  background: #fbfdff;
+  border-radius: var(--xm-radius-sm);
   cursor: pointer;
   transition: all 0.15s;
-  border: 2px solid transparent;
+  border: 1px solid var(--xm-border);
 }
 
 .problem-card:hover {
@@ -503,6 +504,7 @@ const {
 .problem-full-desc {
   padding: 16px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   margin-bottom: 16px;
   font-size: 15px;
@@ -540,7 +542,7 @@ const {
   align-items: center;
   gap: 12px;
   padding: 18px 20px;
-  border-radius: var(--xm-radius);
+  border-radius: var(--xm-radius-sm);
   margin-bottom: 20px;
   font-weight: 800;
   font-size: 18px;
@@ -574,6 +576,7 @@ const {
 .output-block {
   padding: 12px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   font-family: var(--xm-font-mono);
   font-size: 14px;
@@ -607,7 +610,8 @@ const {
   padding: 14px 16px;
   background: var(--xm-surface-soft);
   border-radius: var(--xm-radius-sm);
-  border-left: 4px solid var(--xm-orange);
+  border: 1px solid var(--xm-border);
+  box-shadow: inset 4px 0 0 var(--xm-orange);
 }
 
 .error-header {
@@ -641,6 +645,7 @@ const {
 .suggestion-list li {
   padding: 12px 16px;
   background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
   font-size: 15px;
   font-weight: 600;
@@ -661,6 +666,7 @@ const {
 .tip-item {
   padding: 12px 16px;
   background: var(--xm-info-bg);
+  border: 1px solid rgba(29, 78, 216, 0.12);
   border-radius: var(--xm-radius-sm);
   font-size: 14px;
   font-weight: 600;
@@ -674,7 +680,7 @@ const {
 .explanation-box {
   padding: 16px;
   background: #f0fdf4;
-  border: 2px solid var(--xm-green);
+  border: 1px solid rgba(88, 204, 2, 0.35);
   border-radius: var(--xm-radius-sm);
   font-size: 15px;
   line-height: 1.6;
@@ -693,8 +699,8 @@ const {
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  border: 3px dashed var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px dashed var(--xm-border-strong);
+  border-radius: var(--xm-radius-sm);
   cursor: pointer;
   transition: all 0.2s;
   background: var(--xm-surface-soft);

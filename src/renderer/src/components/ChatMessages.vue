@@ -43,8 +43,8 @@ const {
           <path d="M15 7h2" />
         </svg>
       </div>
-      <h2 class="welcome-title">你好，同学！</h2>
-      <p class="welcome-desc">我是你的学习小帮手，想先做什么？</p>
+      <h2 class="welcome-title">今天先看哪一块？</h2>
+      <p class="welcome-desc">可以问问题、整理资料，也可以先把作业要求放进来。</p>
       <div class="suggestions">
         <button v-for="s in suggestions" :key="s" class="suggestion-btn" @click="$emit('send', s)">
           {{ s }}
@@ -52,7 +52,7 @@ const {
       </div>
 
       <div class="quick-entry-wrap">
-        <div class="quick-entry-title">先从这里开始</div>
+        <div class="quick-entry-title">常用入口</div>
         <div class="quick-entries">
           <button
             v-for="entry in quickEntries"
@@ -124,7 +124,10 @@ const {
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 20px 8px;
+  padding: 24px 24px 10px;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.96) 42%),
+    white;
 }
 
 /* 欢迎页 */
@@ -141,7 +144,7 @@ const {
 .welcome-icon {
   width: 72px;
   height: 72px;
-  background: var(--xm-success-bg);
+  background: linear-gradient(135deg, #f0fdf4, #ddf4ff);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -214,8 +217,8 @@ const {
   gap: 10px;
   min-height: 74px;
   padding: 14px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   background: white;
   cursor: pointer;
   text-align: left;
@@ -226,7 +229,7 @@ const {
   border-color: var(--xm-green);
   background: #f0fdf4;
   transform: translateY(-1px);
-  box-shadow: 0 4px 0 #d9f6cc;
+  box-shadow: var(--xm-shadow-sm);
 }
 
 .quick-icon {
@@ -271,7 +274,7 @@ const {
   display: flex;
   gap: 10px;
   margin-bottom: 16px;
-  max-width: 85%;
+  max-width: min(760px, 85%);
 }
 
 .msg-user {
@@ -287,7 +290,7 @@ const {
 .msg-avatar {
   width: 32px;
   height: 32px;
-  background: var(--xm-green);
+  background: linear-gradient(135deg, var(--xm-green), var(--xm-blue));
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -305,13 +308,16 @@ const {
   color: white;
   border-radius: 16px 16px 4px 16px;
   padding: 10px 14px;
+  box-shadow: 0 8px 18px rgba(88, 204, 2, 0.14);
 }
 
 .msg-assistant .msg-bubble {
-  background: var(--xm-surface-soft);
+  background: white;
   color: var(--xm-text);
   border-radius: 16px 16px 16px 4px;
   padding: 10px 14px;
+  border: 1px solid var(--xm-border);
+  box-shadow: var(--xm-shadow-sm);
 }
 
 .msg-text {
@@ -367,7 +373,7 @@ const {
 }
 
 .msg-md :deep(code) {
-  background: #e8e8e8;
+  background: var(--xm-surface-muted);
   padding: 1px 5px;
   border-radius: 4px;
   font-family: var(--xm-font-mono);
@@ -375,7 +381,7 @@ const {
 }
 
 .msg-md :deep(pre) {
-  background: #1a1a2e;
+  background: #172033;
   color: #e0e0e0;
   padding: 12px;
   border-radius: var(--xm-radius-sm);
@@ -393,7 +399,7 @@ const {
   border-left: 3px solid var(--xm-green);
   padding-left: 12px;
   margin: 8px 0;
-  color: #666;
+  color: var(--xm-text-light);
 }
 
 .msg-md :deep(table) {
@@ -404,12 +410,12 @@ const {
 
 .msg-md :deep(th),
 .msg-md :deep(td) {
-  border: 1px solid #ddd;
+  border: 1px solid var(--xm-border);
   padding: 6px 10px;
 }
 
 .msg-md :deep(th) {
-  background: #f0f0f0;
+  background: var(--xm-surface-soft);
   font-weight: 700;
 }
 

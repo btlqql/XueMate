@@ -40,8 +40,8 @@ function formatHistoryTime(timestamp) {
 <template>
   <div class="helper-layout">
     <section class="card control-card">
-      <h2 class="section-title">你想查什么？</h2>
-      <p class="helper-copy">适合问知识点、找练习题、查学习方法。它会直接搜索网页文字并总结。</p>
+      <h2 class="section-title">想找什么资料？</h2>
+      <p class="helper-copy">可以找练习题、知识点解释，也可以查学习方法。</p>
       <div class="search-row">
         <input
           :value="searchInput"
@@ -56,7 +56,7 @@ function formatHistoryTime(timestamp) {
           @click="emit('search')"
           :disabled="searching || !searchInput.trim()"
         >
-          {{ searching ? '查找中...' : '开始查' }}
+          {{ searching ? '查找中...' : '查一下' }}
         </button>
       </div>
       <div class="sample-row" v-if="!searching && !searchResult">
@@ -103,7 +103,16 @@ function formatHistoryTime(timestamp) {
     <section class="card result-card" v-if="searchResult">
       <div class="result-head">
         <h2 class="section-title">查到的内容</h2>
-        <div class="mode-badge local">本地网页查询</div>
+        <div
+          class="mode-badge"
+          :class="searchResult.mode === 'web' || searchResult.mode === 'cloud' ? 'web' : 'local'"
+        >
+          {{
+            searchResult.mode === 'web' || searchResult.mode === 'cloud'
+              ? '网页整理结果'
+              : '本地网页查询'
+          }}
+        </div>
       </div>
       <div class="resource-meta" v-if="searchResult.elapsedMs || searchResult.cacheHit">
         <span v-if="searchResult.elapsedMs">{{ searchResult.elapsedMs }}ms</span>
@@ -201,7 +210,7 @@ function formatHistoryTime(timestamp) {
     </section>
 
     <section class="card tips-card" v-if="!searchResult && !searching">
-      <h2 class="section-title">快速查资料适合做什么</h2>
+      <h2 class="section-title">适合这些场景</h2>
       <div class="feature-grid">
         <div class="feature">
           <strong>找练习题</strong>
@@ -209,15 +218,15 @@ function formatHistoryTime(timestamp) {
         </div>
         <div class="feature">
           <strong>解释知识点</strong>
-          <p>把网页内容整理成适合学生读的总结。</p>
+          <p>把网页里的长内容压成几段重点。</p>
         </div>
         <div class="feature">
-          <strong>网页查询</strong>
-          <p>可按适龄性、可信度、可读性整理网页资料。</p>
+          <strong>挑一挑来源</strong>
+          <p>优先看适合学习、可信、表达清楚的网页。</p>
         </div>
         <div class="feature">
           <strong>更快</strong>
-          <p>比操作网页更快，适合普通查询。</p>
+          <p>不用一步步点网页，先拿到一版可读结果。</p>
         </div>
       </div>
     </section>

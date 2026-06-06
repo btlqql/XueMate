@@ -15,8 +15,8 @@ const currentTool = ref('task')
 const tools = [
   {
     id: 'task',
-    label: '任务解析',
-    desc: '提取作业要求和截止时间',
+    label: '作业清单',
+    desc: '整理要求、时间和提交格式',
     component: markRaw(TaskView)
   },
   {
@@ -28,7 +28,7 @@ const tools = [
   {
     id: 'review',
     label: '复习总结',
-    desc: '生成课程复习提纲',
+    desc: '梳理章节、重点和复习安排',
     component: markRaw(ReviewView)
   }
 ]
@@ -106,8 +106,8 @@ watch(
   align-items: flex-start;
   gap: 4px;
   padding: 14px 16px;
-  border: 2px solid var(--xm-border);
-  border-radius: var(--xm-radius-lg);
+  border: 1px solid var(--xm-border);
+  border-radius: var(--xm-radius-sm);
   background: var(--xm-surface);
   color: var(--xm-text-light);
   cursor: pointer;
@@ -118,12 +118,13 @@ watch(
 .tool-tab:hover {
   border-color: var(--xm-border-strong);
   transform: translateY(-1px);
+  box-shadow: var(--xm-shadow-sm);
 }
 
 .tool-tab.active {
   border-color: var(--xm-green);
   background: #f0fdf4;
-  box-shadow: 0 3px 0 #d9f6cc;
+  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
 }
 
 .tool-label {
