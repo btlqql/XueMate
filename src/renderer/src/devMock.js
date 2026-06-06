@@ -330,6 +330,7 @@ function installBrowserPreviewMocks() {
   }
 
   window.webAssistant = {
+    isPreview: true,
     start: () => fail('试用模式暂时不能打开内置网页，请在完整软件窗口中使用。'),
     stop: () => ok(true),
     setLiveBounds: () => ok(true),

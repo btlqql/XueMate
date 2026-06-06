@@ -15,20 +15,20 @@ const currentTool = ref('task')
 const tools = [
   {
     id: 'task',
-    label: '作业清单',
-    desc: '整理要求、时间和提交格式',
+    label: '整理作业',
+    desc: '拆清要求、时间和提交格式',
     component: markRaw(TaskView)
   },
   {
     id: 'tutor',
-    label: '学习辅导',
-    desc: '代码分析、作业检查、刷题练习',
+    label: '代码与作业辅导',
+    desc: '代码分析、作业检查和练习',
     component: markRaw(TutorView)
   },
   {
     id: 'review',
-    label: '复习总结',
-    desc: '梳理章节、重点和复习安排',
+    label: '复习计划',
+    desc: '先做提纲，后续接入薄弱点',
     component: markRaw(ReviewView)
   }
 ]
@@ -63,8 +63,8 @@ watch(
 <template>
   <div class="tool-view fade-in">
     <div class="page-header">
-      <h1 class="page-title">工具箱</h1>
-      <p class="page-desc">把明确的学习任务交给专用工具处理</p>
+      <h1 class="page-title">学习工具</h1>
+      <p class="page-desc">这些是问学伴之外的二级能力，用来处理更明确的作业、代码和复习任务</p>
     </div>
 
     <div class="tool-tabs">
@@ -124,7 +124,9 @@ watch(
 .tool-tab.active {
   border-color: var(--xm-green);
   background: #f0fdf4;
-  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
+  box-shadow:
+    inset 0 0 0 1px rgba(88, 204, 2, 0.18),
+    var(--xm-shadow-sm);
 }
 
 .tool-label {

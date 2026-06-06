@@ -1,6 +1,10 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-export const searchSamples = ['三年级分数加法练习题', '小学生英语单词记忆方法', '五年级科学小实验']
+export const searchSamples = [
+  '三年级分数加法练习题',
+  '小学生英语单词记忆方法',
+  '五年级科学探究资料'
+]
 
 export function useQuickSearch(initialPayload = null) {
   const searchInput = ref(normalizeDraftPrompt(initialPayload))
@@ -56,11 +60,11 @@ export function useQuickSearch(initialPayload = null) {
         refreshQuickSearchHistory()
       } else {
         if (pendingBackgroundQuery === query) pendingBackgroundQuery = ''
-        searchError.value = result.error || '查资料失败'
+        searchError.value = result.error || '找网页资料失败'
       }
     } catch (e) {
       if (pendingBackgroundQuery === query) pendingBackgroundQuery = ''
-      searchError.value = '查资料失败：' + (e.message || '未知错误')
+      searchError.value = '找网页资料失败：' + (e.message || '未知错误')
     } finally {
       searching.value = false
     }

@@ -36,8 +36,8 @@ const generateOutline = async () => {
 <template>
   <div class="fade-in">
     <div class="page-header">
-      <h1 class="page-title">复习总结</h1>
-      <p class="page-desc">把课程内容拆成章节、重点和接下来的复习安排</p>
+      <h1 class="page-title">复习计划</h1>
+      <p class="page-desc">先把课程内容拆成复习提纲，后续接入学伴记录的薄弱点</p>
     </div>
 
     <div class="card">
@@ -60,7 +60,12 @@ const generateOutline = async () => {
               <div class="chapter-header">
                 <span class="chapter-title">{{ ch.title }}</span>
                 <span class="freq">
-                  <span v-for="n in 5" :key="n" class="freq-dot" :class="{ active: n <= ch.freq }"></span>
+                  <span
+                    v-for="n in 5"
+                    :key="n"
+                    class="freq-dot"
+                    :class="{ active: n <= ch.freq }"
+                  ></span>
                 </span>
               </div>
               <div class="points">
@@ -78,10 +83,18 @@ const generateOutline = async () => {
         <div class="card">
           <h2 class="section-title">7天复习计划</h2>
           <div class="plan-list">
-            <div class="plan-item"><span class="plan-day">1-2</span><span>基础概念 + 简单题</span></div>
-            <div class="plan-item"><span class="plan-day">3-4</span><span>重点章节 + 习题</span></div>
-            <div class="plan-item"><span class="plan-day">5-6</span><span>综合练习 + 真题</span></div>
-            <div class="plan-item highlight"><span class="plan-day">7</span><span>查漏补缺 + 考前回顾</span></div>
+            <div class="plan-item">
+              <span class="plan-day">1-2</span><span>基础概念 + 简单题</span>
+            </div>
+            <div class="plan-item">
+              <span class="plan-day">3-4</span><span>重点章节 + 习题</span>
+            </div>
+            <div class="plan-item">
+              <span class="plan-day">5-6</span><span>综合练习 + 真题</span>
+            </div>
+            <div class="plan-item highlight">
+              <span class="plan-day">7</span><span>查漏补缺 + 考前回顾</span>
+            </div>
           </div>
         </div>
       </div>
@@ -90,10 +103,22 @@ const generateOutline = async () => {
     <div class="card" v-if="!outline">
       <h2 class="section-title">可以整理这些内容</h2>
       <div class="feature-grid">
-        <div class="feature"><strong>章节提纲</strong><p>把课程拆成几块内容来看</p></div>
-        <div class="feature"><strong>重点标记</strong><p>标注各章节考试频率</p></div>
-        <div class="feature"><strong>复习安排</strong><p>按天排出大致复习节奏</p></div>
-        <div class="feature"><strong>查漏补缺</strong><p>把容易漏掉的地方单独列出来</p></div>
+        <div class="feature">
+          <strong>章节提纲</strong>
+          <p>把课程拆成几块内容来看</p>
+        </div>
+        <div class="feature">
+          <strong>重点标记</strong>
+          <p>标注各章节考试频率</p>
+        </div>
+        <div class="feature">
+          <strong>复习安排</strong>
+          <p>按天排出大致复习节奏</p>
+        </div>
+        <div class="feature">
+          <strong>查漏补缺</strong>
+          <p>把容易漏掉的地方单独列出来</p>
+        </div>
       </div>
     </div>
   </div>
@@ -104,7 +129,9 @@ const generateOutline = async () => {
   display: flex;
   gap: 8px;
 }
-.input-bar .input { flex: 1; }
+.input-bar .input {
+  flex: 1;
+}
 
 .outline-layout {
   display: grid;
@@ -133,18 +160,30 @@ const generateOutline = async () => {
   margin-bottom: 6px;
 }
 
-.chapter-title { font-weight: 700; font-size: 14px; }
+.chapter-title {
+  font-weight: 700;
+  font-size: 14px;
+}
 
-.freq { display: flex; gap: 3px; }
+.freq {
+  display: flex;
+  gap: 3px;
+}
 .freq-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--xm-border);
 }
-.freq-dot.active { background: var(--xm-green); }
+.freq-dot.active {
+  background: var(--xm-green);
+}
 
-.points { display: flex; flex-wrap: wrap; gap: 4px; }
+.points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 .point-tag {
   padding: 2px 10px;
   background: white;
@@ -162,7 +201,11 @@ const generateOutline = async () => {
   margin: 20px 0 10px;
 }
 
-.tips-list { display: flex; flex-direction: column; gap: 4px; }
+.tips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .tip-item {
   padding: 8px 12px;
   background: var(--xm-info-bg);
@@ -172,7 +215,11 @@ const generateOutline = async () => {
   font-weight: 600;
 }
 
-.plan-list { display: flex; flex-direction: column; gap: 6px; }
+.plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .plan-item {
   display: flex;
   align-items: center;
@@ -213,12 +260,23 @@ const generateOutline = async () => {
   border: 1px solid var(--xm-border);
   border-radius: var(--xm-radius-sm);
 }
-.feature strong { font-size: 14px; display: block; margin-bottom: 2px; }
-.feature p { font-size: 13px; color: var(--xm-text-light); }
+.feature strong {
+  font-size: 14px;
+  display: block;
+  margin-bottom: 2px;
+}
+.feature p {
+  font-size: 13px;
+  color: var(--xm-text-light);
+}
 
 @media (max-width: 800px) {
-  .outline-layout { grid-template-columns: 1fr; }
-  .feature-grid { grid-template-columns: 1fr; }
+  .outline-layout {
+    grid-template-columns: 1fr;
+  }
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .error-msg {

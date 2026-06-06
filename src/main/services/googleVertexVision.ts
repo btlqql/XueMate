@@ -4,7 +4,7 @@ import { spawnSync } from 'child_process'
 import { createSign } from 'crypto'
 
 const DEFAULT_LOCATION = 'global'
-const DEFAULT_VERTEX_VISION_MODEL = 'gemini-3.5-flash'
+const DEFAULT_VERTEX_VISION_MODEL = 'gemini-2.5-flash-lite'
 const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 const METADATA_TOKEN_URL =
   'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'
@@ -26,7 +26,35 @@ interface VertexConfig {
   gcloud?: string
 }
 
-export async function vertexVisionJson<T = any>(options: VertexVisionJsonOptions): Promise<T> {
+interface RetriableError extends Error {
+  status?: number
+  retryable?: boolean
+}
+
+interface VertexApiResponse {
+  error?: {
+    code?: number
+    message?: string
+  }
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string
+      }>
+    }
+  }>
+}
+
+function asRetriableError(error: Error): RetriableError {
+  return error as RetriableError
+}
+
+function toRetriableError(error: unknown): RetriableError {
+  if (error instanceof Error) return error as RetriableError
+  return new Error(String(error || '未知错误')) as RetriableError
+}
+
+export async function vertexVisionJson<T = unknown>(options: VertexVisionJsonOptions): Promise<T> {
   const responseText = await requestVertexVisionText(options)
   return parseJsonObject(responseText) as T
 }
@@ -74,31 +102,34 @@ async function requestVertexVisionText(options: VertexVisionJsonOptions): Promis
       const error = new Error(
         body?.error?.message || `Vertex AI vision request failed with HTTP ${response.status}`
       )
-      ;(error as any).status = response.status || body?.error?.code
-      ;(error as any).retryable = isRetryableStatus(response.status || body?.error?.code)
+      const requestError = asRetriableError(error)
+      const status = response.status || body?.error?.code || 0
+      requestError.status = status
+      requestError.retryable = isRetryableStatus(status)
       throw error
     }
 
     const parts = body?.candidates?.[0]?.content?.parts
     const text = Array.isArray(parts)
       ? parts
-          .filter((part: any) => typeof part.text === 'string')
-          .map((part: any) => part.text)
+          .filter((part) => typeof part.text === 'string')
+          .map((part) => part.text)
           .join('\n')
           .trim()
       : ''
 
     if (!text) {
       const error = new Error('Vertex 多模态理解模型没有返回文本 JSON')
-      ;(error as any).retryable = true
+      asRetriableError(error).retryable = true
       throw error
     }
 
     return text
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
+  } catch (error) {
+    const requestError = toRetriableError(error)
+    if (requestError.name === 'AbortError') {
       const timeoutError = new Error('Vertex 多模态理解请求超时')
-      ;(timeoutError as any).retryable = true
+      asRetriableError(timeoutError).retryable = true
       throw timeoutError
     }
     throw error
@@ -265,15 +296,15 @@ function runCommand(command: string, args: string[]): string {
   return result.stdout.trim()
 }
 
-function parseJsonResponse(text: string, status: number): any {
+function parseJsonResponse(text: string, status: number): VertexApiResponse {
   try {
-    return JSON.parse(text)
+    return JSON.parse(text) as VertexApiResponse
   } catch {
     return { error: { code: status, message: text.slice(0, 500) } }
   }
 }
 
-function parseJsonObject(text: string): any {
+function parseJsonObject(text: string): unknown {
   const trimmed = text
     .trim()
     .replace(/^```(?:json)?/i, '')

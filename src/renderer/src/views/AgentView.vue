@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { searchSamples, useQuickSearch } from '../composables/useQuickSearch'
 import { controlSamples, stateLabel, useWebAssistant } from '../composables/useWebAssistant'
 import QuickSearchPanel from '../components/agent/QuickSearchPanel.vue'
@@ -10,8 +10,11 @@ const props = defineProps({
   routePayload: { type: Object, default: null }
 })
 
+const emit = defineEmits(['navigate'])
+
 const modeIds = ['search', 'control']
 const activeMode = ref('search')
+const returnConversationId = ref('')
 
 function normalizeModeId(value) {
   if (typeof value !== 'string') return ''
@@ -21,6 +24,11 @@ function normalizeModeId(value) {
 
 function normalizeDraftPrompt(value) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeConversationId(value) {
+  if (typeof value === 'string' || typeof value === 'number') return String(value).trim()
+  return ''
 }
 
 function resolveRouteMode() {
@@ -36,6 +44,14 @@ function resolveDraftPrompt() {
     normalizeDraftPrompt(props.routePayload?.draftPrompt) ||
     normalizeDraftPrompt(props.currentRoute?.payload?.draftPrompt) ||
     normalizeDraftPrompt(props.currentRoute?.draftPrompt)
+  )
+}
+
+function resolveConversationId() {
+  return (
+    normalizeConversationId(props.routePayload?.conversationId) ||
+    normalizeConversationId(props.currentRoute?.payload?.conversationId) ||
+    normalizeConversationId(props.currentRoute?.conversationId)
   )
 }
 
@@ -57,12 +73,15 @@ const {
 
 const {
   goalInput,
+  browserPreview,
   running,
   state,
   steps,
   screenshotSrc,
   currentUrl,
   currentTitle,
+  stepIndex,
+  maxSteps,
   friendlyError,
   error,
   answer,
@@ -74,6 +93,58 @@ const {
   stopAssistant,
   clearControl
 } = useWebAssistant(activeMode)
+
+const preferredWebMaterial = computed(() => backgroundResult.value || searchResult.value)
+const canReturnWebMaterialToChat = computed(() => Boolean(preferredWebMaterial.value))
+const returnToChatLabel = computed(() =>
+  returnConversationId.value ? '带回原对话继续问' : '带回问学伴'
+)
+
+function collectSourceLines(result) {
+  if (!Array.isArray(result?.sources)) return []
+  return result.sources.slice(0, 3).map((source, index) => {
+    const title = source?.title || '网页资料'
+    const url = source?.url || source?.href || ''
+    return url ? `${index + 1}. ${title}：${url}` : `${index + 1}. ${title}`
+  })
+}
+
+function buildWebMaterialDraftPrompt() {
+  const result = preferredWebMaterial.value
+  const query = normalizeDraftPrompt(result?.query) || normalizeDraftPrompt(searchInput.value)
+  const summary = normalizeDraftPrompt(result?.summary)
+  const sourceLines = collectSourceLines(result)
+  const sourceText = sourceLines.length ? `\n参考来源：\n${sourceLines.join('\n')}` : ''
+  const summaryText = summary ? `\n网页整理摘要：${summary}` : ''
+  const question = query || '刚才查到的网页资料'
+
+  return `我刚补充查了「${question}」相关网页资料。${summaryText}${sourceText}\n\n请结合资料库和这些网页资料，用小学生能听懂的方式继续讲解，并给我下一步学习建议。`
+}
+
+function returnWebMaterialToChat() {
+  const payload = {
+    collectionId: 'all',
+    draftPrompt: buildWebMaterialDraftPrompt()
+  }
+  if (returnConversationId.value) {
+    payload.conversationId = returnConversationId.value
+  }
+  emit('navigate', {
+    view: 'chat',
+    payload
+  })
+}
+
+function openKnowledge() {
+  emit('navigate', 'knowledge')
+}
+
+function openStudyTool(tool) {
+  emit('navigate', {
+    view: 'tools',
+    tool
+  })
+}
 
 watch(
   () => resolveRouteMode(),
@@ -90,13 +161,21 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => resolveConversationId(),
+  (conversationId) => {
+    returnConversationId.value = conversationId
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
   <div class="fade-in agent-view">
     <div class="page-header">
-      <h1 class="page-title">小实验</h1>
-      <p class="page-desc">一个适合快速找资料，一个适合边看网页边操作</p>
+      <h1 class="page-title">网页资料</h1>
+      <p class="page-desc">当本地资料不够时，先找一版补充资料；复杂网页操作放到高级模式</p>
     </div>
 
     <div class="mode-tabs">
@@ -107,7 +186,7 @@ watch(
       >
         <span class="mode-icon">🔎</span>
         <span>
-          <strong>查资料</strong>
+          <strong>找网页资料</strong>
           <small>先看一版整理结果</small>
         </span>
       </button>
@@ -118,13 +197,36 @@ watch(
       >
         <span class="mode-icon">🖱️</span>
         <span>
-          <strong>看网页</strong>
+          <strong>网页助手（高级）</strong>
           <small>打开网页后一步步处理</small>
         </span>
       </button>
     </div>
 
-    <!-- 快速查资料 -->
+    <div class="web-return-card card" v-if="activeMode === 'search'">
+      <div>
+        <strong>网页资料不是终点</strong>
+        <p>查到资料后，把摘要和来源带回问学伴，继续在原来的学习对话里讲清楚。</p>
+      </div>
+      <div class="web-return-actions">
+        <button
+          class="btn btn-primary btn-sm"
+          type="button"
+          :disabled="!canReturnWebMaterialToChat"
+          @click="returnWebMaterialToChat"
+        >
+          {{ returnToChatLabel }}
+        </button>
+        <button class="btn btn-outline btn-sm" type="button" @click="openKnowledge">
+          去资料库
+        </button>
+        <button class="btn btn-outline btn-sm" type="button" @click="openStudyTool('task')">
+          整理作业
+        </button>
+      </div>
+    </div>
+
+    <!-- 快速找网页资料 -->
     <QuickSearchPanel
       v-if="activeMode === 'search'"
       v-model:searchInput="searchInput"
@@ -138,18 +240,24 @@ watch(
       :quick-search-history="quickSearchHistory"
       :quick-search-history-loading="quickSearchHistoryLoading"
       :search-samples="searchSamples"
+      :can-return-to-chat="canReturnWebMaterialToChat"
+      :return-label="returnToChatLabel"
       @search="runQuickSearch"
       @sample="loadSearchSample"
+      @return-chat="returnWebMaterialToChat"
     />
 
-    <!-- 操作网页 -->
+    <!-- 网页助手 -->
     <WebAssistantPanel
       v-else
       v-model:goalInput="goalInput"
+      :browser-preview="browserPreview"
       :running="running"
       :state="state"
       :state-label="stateLabel"
       :steps="steps"
+      :step-index="stepIndex"
+      :max-steps="maxSteps"
       :screenshot-src="screenshotSrc"
       :current-url="currentUrl"
       :current-title="currentTitle"
@@ -192,7 +300,9 @@ watch(
 .agent-view .mode-tab.active {
   border-color: var(--xm-green);
   background: #f0fdf4;
-  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
+  box-shadow:
+    inset 0 0 0 1px rgba(88, 204, 2, 0.18),
+    var(--xm-shadow-sm);
 }
 
 .agent-view .mode-icon {
@@ -221,10 +331,113 @@ watch(
   margin-top: 3px;
 }
 
+.agent-view .web-return-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  border-color: rgba(88, 204, 2, 0.22);
+  background: linear-gradient(135deg, #ffffff 0%, #f6fff0 100%);
+}
+
+.agent-view .web-return-card strong {
+  display: block;
+  color: var(--xm-text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.agent-view .web-return-card p {
+  margin-top: 3px;
+  color: var(--xm-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.agent-view .web-return-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .agent-view .helper-layout {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.agent-view .result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.agent-view .control-console {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.agent-view .control-command-card {
+  border-color: rgba(88, 204, 2, 0.3);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fff1 100%);
+}
+
+.agent-view .command-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.agent-view .command-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.agent-view .goal-label {
+  display: block;
+  grid-column: 1 / -1;
+  color: var(--xm-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agent-view .command-actions {
+  align-self: stretch;
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+.agent-view .control-workspace {
+  display: grid;
+  grid-template-columns: minmax(560px, 1fr) minmax(310px, 32%);
+  gap: 16px;
+  align-items: start;
+}
+
+.agent-view .browser-stage-card {
+  min-width: 0;
+}
+
+.agent-view .assistant-rail {
+  position: sticky;
+  top: 16px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.agent-view .assistant-status-card {
+  border-color: rgba(59, 130, 246, 0.18);
 }
 
 .agent-view .control-layout {
@@ -296,7 +509,11 @@ watch(
 
 .agent-view .state-opening,
 .agent-view .state-looking,
-.agent-view .state-acting {
+.agent-view .state-observing,
+.agent-view .state-thinking,
+.agent-view .state-acting,
+.agent-view .state-settling,
+.agent-view .state-cancelling {
   background: var(--xm-info-bg);
   color: var(--xm-info-text);
 }
@@ -311,7 +528,14 @@ watch(
   color: var(--xm-danger-text);
 }
 
-.agent-view .state-stopped {
+.agent-view .state-timed_out,
+.agent-view .state-blocked {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.agent-view .state-stopped,
+.agent-view .state-cancelled {
   background: var(--xm-surface-muted);
   color: #6b7280;
 }
@@ -619,7 +843,9 @@ watch(
   background: var(--xm-surface-soft);
   border: 1px solid var(--xm-border);
   text-decoration: none;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .agent-view .source-item:hover {
@@ -718,6 +944,11 @@ watch(
   position: relative;
 }
 
+.agent-view .browser-stage-card .live-browser-box {
+  height: clamp(430px, 62vh, 720px);
+  min-height: 420px;
+}
+
 .agent-view .live-browser-box img {
   display: block;
   width: 100%;
@@ -755,6 +986,87 @@ watch(
   color: var(--xm-text-muted);
   font-size: 13px;
   font-weight: 900;
+}
+
+.agent-view .progress-track {
+  height: 9px;
+  border-radius: var(--xm-radius-pill);
+  background: var(--xm-surface-muted);
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.agent-view .progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--xm-green), #22c55e);
+  transition: width 0.25s ease;
+}
+
+.agent-view .current-action-card {
+  padding: 13px;
+  border-radius: var(--xm-radius-sm);
+  background: var(--xm-surface-soft);
+  border: 1px solid var(--xm-border);
+}
+
+.agent-view .current-action-card small {
+  display: block;
+  color: var(--xm-text-muted);
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 5px;
+}
+
+.agent-view .current-action-card strong {
+  display: block;
+  color: var(--xm-text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.agent-view .current-action-card p {
+  color: var(--xm-text-light);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.agent-view .debug-details {
+  padding: 0;
+  overflow: hidden;
+}
+
+.agent-view .debug-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 16px 18px;
+  color: var(--xm-text);
+  font-weight: 900;
+  list-style: none;
+}
+
+.agent-view .debug-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-view .debug-details summary small {
+  color: var(--xm-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.agent-view .debug-details[open] {
+  padding-bottom: 16px;
+}
+
+.agent-view .debug-details[open] .empty-steps,
+.agent-view .debug-details[open] .dom-list {
+  margin: 0 18px;
 }
 
 .agent-view .empty-steps {
@@ -919,11 +1231,26 @@ watch(
   margin-top: 6px;
 }
 
+@media (max-width: 1100px) {
+  .agent-view .control-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-view .assistant-rail {
+    position: static;
+  }
+}
+
 @media (max-width: 900px) {
   .agent-view .feature-grid,
   .agent-view .mode-tabs,
   .agent-view .dom-list,
   .agent-view .control-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-view .command-head,
+  .agent-view .command-body {
     grid-template-columns: 1fr;
   }
 
@@ -933,6 +1260,11 @@ watch(
 
   .agent-view .live-browser-box {
     height: 320px;
+  }
+
+  .agent-view .browser-stage-card .live-browser-box {
+    height: 360px;
+    min-height: 320px;
   }
 
   .agent-view .search-row {

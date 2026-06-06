@@ -2,7 +2,14 @@ import { net } from 'electron'
 import { vertexVisionJson } from './googleVertexVision'
 // 普通多模态模型调用：OpenAI-compatible Chat Completions。
 // 如果设置 VISION_PROVIDER=google-vertex，则走 Vertex AI Gemini generateContent 做多模态理解。
-// 推荐环境变量：
+// XueMate Computer Use 当前默认路线是 gcloud / Google Vertex：
+// VISION_PROVIDER=google-vertex
+// GOOGLE_VERTEX_PROJECT=你的 Google Cloud Project ID
+// GOOGLE_VERTEX_LOCATION=global
+// GOOGLE_VERTEX_VISION_MODEL=gemini-2.5-flash-lite
+// GOOGLE_VERTEX_VISION_FALLBACK_MODELS=gemini-2.5-flash,gemini-3.1-flash-lite,gemini-3.1-pro-preview
+//
+// OpenAI-compatible 备选路线：
 // VISION_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
 // VISION_API_KEY=你的多模态模型 key
 // VISION_MODEL=gemini-2.5-flash 或 qwen-vl-plus
@@ -13,13 +20,13 @@ const VISION_API_KEY = process.env.VISION_API_KEY || process.env.GEMINI_API_KEY 
 const VISION_BASE_URL =
   process.env.VISION_BASE_URL ||
   'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-const VISION_MODEL =
-  process.env.VISION_MODEL ||
-  (isGoogleVertexProvider()
-    ? process.env.GOOGLE_VERTEX_VISION_MODEL || 'gemini-3.5-flash'
-    : 'gemini-2.5-flash')
+const VISION_MODEL = isGoogleVertexProvider()
+  ? process.env.GOOGLE_VERTEX_VISION_MODEL || process.env.VISION_MODEL || 'gemini-2.5-flash-lite'
+  : process.env.VISION_MODEL || 'gemini-2.5-flash'
 const VISION_FALLBACK_MODELS =
-  process.env.VISION_FALLBACK_MODELS || process.env.GOOGLE_VERTEX_VISION_FALLBACK_MODELS || ''
+  (isGoogleVertexProvider()
+    ? process.env.GOOGLE_VERTEX_VISION_FALLBACK_MODELS || process.env.VISION_FALLBACK_MODELS
+    : process.env.VISION_FALLBACK_MODELS || process.env.GOOGLE_VERTEX_VISION_FALLBACK_MODELS) || ''
 
 export interface VisionJsonOptions {
   prompt: string
@@ -29,7 +36,40 @@ export interface VisionJsonOptions {
   timeoutMs?: number
 }
 
-export async function visionJson<T = any>(options: VisionJsonOptions): Promise<T> {
+interface RetriableError extends Error {
+  status?: number
+  retryable?: boolean
+  cause?: { message?: string }
+}
+
+interface ChatCompletionResponse {
+  choices?: Array<{
+    message?: {
+      content?: unknown
+    }
+  }>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getErrorMessage(error: unknown, fallback = '未知错误'): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
+
+function asRetriableError(error: Error): RetriableError {
+  return error as RetriableError
+}
+
+function toRetriableError(error: unknown): RetriableError {
+  if (error instanceof Error) return error as RetriableError
+  return new Error(String(error || '未知错误')) as RetriableError
+}
+
+export async function visionJson<T = unknown>(options: VisionJsonOptions): Promise<T> {
   if (!isGoogleVertexProvider() && !VISION_API_KEY) {
     throw new Error('缺少 VISION_API_KEY 或 GEMINI_API_KEY，请先配置多模态模型密钥')
   }
@@ -43,14 +83,14 @@ export async function visionJson<T = any>(options: VisionJsonOptions): Promise<T
     for (let attempt = 1; attempt <= maxAttemptsPerModel; attempt++) {
       try {
         return await requestVisionJson<T>({ ...options, model: candidateModel })
-      } catch (error: any) {
+      } catch (error) {
         const failure = normalizeFailure(error, candidateModel)
         failures.push(failure)
         console.warn(
           `[Vision] ${candidateModel} attempt ${attempt} failed (${failure.status || 'unknown'}): ${failure.message}`
         )
 
-        if (!failure.retryable) {
+        if (!failure.retryable && !shouldTryNextModel(failure, models, candidateModel)) {
           throw new Error(formatVisionError([failure]))
         }
 
@@ -71,7 +111,7 @@ interface VisionFailure {
   retryable: boolean
 }
 
-async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T> {
+async function requestVisionJson<T = unknown>(options: VisionJsonOptions): Promise<T> {
   if (isGoogleVertexProvider()) {
     return vertexVisionJson<T>(options)
   }
@@ -119,36 +159,37 @@ async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T
       const body = await response.text()
       const detail = extractProviderError(body)
       const error = new Error(detail || response.statusText || '模型请求失败')
-      ;(error as any).status = response.status
-      ;(error as any).retryable = isRetryableStatus(response.status)
+      const requestError = asRetriableError(error)
+      requestError.status = response.status
+      requestError.retryable = isRetryableStatus(response.status)
       throw error
     }
 
-    const data = await response.json()
+    const data = (await response.json()) as ChatCompletionResponse
     const content = normalizeContent(data?.choices?.[0]?.message?.content)
     if (!content) {
       const error = new Error('多模态模型没有返回内容')
-      ;(error as any).retryable = true
+      asRetriableError(error).retryable = true
       throw error
     }
 
     return parseJsonObject(content) as T
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
+  } catch (error) {
+    const requestError = toRetriableError(error)
+    if (requestError.name === 'AbortError') {
       const timeoutError = new Error('多模态模型请求超时')
-      ;(timeoutError as any).retryable = true
+      asRetriableError(timeoutError).retryable = true
       throw timeoutError
     }
-    if (
-      /^net::ERR_|ERR_NETWORK|ERR_TIMED_OUT|ERR_CONNECTION|ERR_PROXY/i.test(error.message || '')
-    ) {
-      const networkError = new Error(`网络连接不稳定：${error.message}`)
-      ;(networkError as any).retryable = true
+    const message = getErrorMessage(requestError, '')
+    if (/^net::ERR_|ERR_NETWORK|ERR_TIMED_OUT|ERR_CONNECTION|ERR_PROXY/i.test(message)) {
+      const networkError = new Error(`网络连接不稳定：${message}`)
+      asRetriableError(networkError).retryable = true
       throw networkError
     }
-    if (error.message === 'fetch failed' && error.cause?.message) {
-      const fetchError = new Error(`多模态模型请求失败：${error.cause.message}`)
-      ;(fetchError as any).retryable = true
+    if (message === 'fetch failed' && requestError.cause?.message) {
+      const fetchError = new Error(`多模态模型请求失败：${requestError.cause.message}`)
+      asRetriableError(fetchError).retryable = true
       throw fetchError
     }
     throw error
@@ -159,9 +200,14 @@ async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T
 
 function buildModelList(primaryModel: string): string[] {
   const defaults = isGoogleVertexProvider()
-    ? ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash']
+    ? [
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-3.1-pro-preview'
+      ]
     : isGoogleVisionEndpoint()
-      ? ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash']
+      ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
       : []
   const configuredFallbacks = VISION_FALLBACK_MODELS.split(',')
     .map((item) => item.trim())
@@ -180,18 +226,39 @@ function isGoogleVisionEndpoint(): boolean {
   return /generativelanguage\.googleapis\.com/i.test(VISION_BASE_URL)
 }
 
-function normalizeFailure(error: any, model: string): VisionFailure {
-  const status = Number(error?.status)
+function normalizeFailure(error: unknown, model: string): VisionFailure {
+  const requestError = toRetriableError(error)
+  const status = Number(requestError.status)
+  const message = getErrorMessage(requestError, '模型请求失败')
   return {
     model,
     status: Number.isFinite(status) ? status : undefined,
-    message: String(error?.message || '模型请求失败'),
-    retryable: Boolean(error?.retryable) || isRetryableStatus(status)
+    message,
+    retryable:
+      Boolean(requestError.retryable) ||
+      isRetryableStatus(status) ||
+      isModelSelectionError(status, message)
   }
 }
 
 function isRetryableStatus(status: number): boolean {
   return [408, 409, 425, 429, 500, 502, 503, 504].includes(status)
+}
+
+function shouldTryNextModel(
+  failure: VisionFailure,
+  models: string[],
+  currentModel: string
+): boolean {
+  if (!isModelSelectionError(failure.status || 0, failure.message)) return false
+  return models.indexOf(currentModel) < models.length - 1
+}
+
+function isModelSelectionError(status: number, message: string): boolean {
+  return (
+    [400, 404].includes(status) &&
+    /model|模型|not found|not supported|not exist|not available|not enabled/i.test(message)
+  )
 }
 
 function formatVisionError(failures: VisionFailure[]): string {
@@ -206,7 +273,15 @@ function formatVisionError(failures: VisionFailure[]): string {
   )
 
   if (hasQuota && !hasBusy) {
-    return '多模态模型额度不足或被限流了。可以稍后再试，或在 .env 里换一个 VISION_MODEL。'
+    return `多模态模型额度不足或被限流了。可以稍后再试，或在 .env 里换一个 ${modelEnvName()}。`
+  }
+
+  const hasModelSelectionError = failures.some((failure) =>
+    isModelSelectionError(failure.status || 0, failure.message)
+  )
+  if (hasModelSelectionError) {
+    const triedModels = [...new Set(failures.map((failure) => failure.model))].join('、')
+    return `多模态模型名称不可用，已尝试备用模型（${triedModels}），仍然失败。请检查 .env 里的 ${modelEnvName()}。`
   }
 
   if (hasBusy) {
@@ -217,11 +292,20 @@ function formatVisionError(failures: VisionFailure[]): string {
   return last?.message || '多模态模型请求失败'
 }
 
+function modelEnvName(): string {
+  return isGoogleVertexProvider() ? 'GOOGLE_VERTEX_VISION_MODEL' : 'VISION_MODEL'
+}
+
 function extractProviderError(body: string): string {
   try {
-    const parsed = JSON.parse(body)
+    const parsed = JSON.parse(body) as unknown
     const payload = Array.isArray(parsed) ? parsed[0] : parsed
-    return payload?.error?.message || payload?.message || body.slice(0, 220)
+    if (isRecord(payload)) {
+      const error = payload.error
+      if (isRecord(error) && typeof error.message === 'string') return error.message
+      if (typeof payload.message === 'string') return payload.message
+    }
+    return body.slice(0, 220)
   } catch {
     return body.slice(0, 220)
   }
@@ -231,10 +315,11 @@ function normalizeContent(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
     return content
-      .map((item: any) => {
+      .map((item: unknown) => {
         if (typeof item === 'string') return item
-        if (typeof item?.text === 'string') return item.text
-        if (typeof item?.content === 'string') return item.content
+        if (!isRecord(item)) return ''
+        if (typeof item.text === 'string') return item.text
+        if (typeof item.content === 'string') return item.content
         return ''
       })
       .join('\n')
@@ -242,7 +327,7 @@ function normalizeContent(content: unknown): string {
   return ''
 }
 
-function parseJsonObject(text: string): any {
+function parseJsonObject(text: string): unknown {
   const trimmed = text
     .trim()
     .replace(/^```(?:json)?/i, '')

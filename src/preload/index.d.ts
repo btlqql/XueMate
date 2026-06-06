@@ -164,9 +164,7 @@ interface RagAPI {
     filePath: string,
     collectionId?: string
   ) => Promise<{ success: boolean; data?: RagDocument; error?: string }>
-  selectAndImport: (
-    collectionId?: string
-  ) => Promise<{
+  selectAndImport: (collectionId?: string) => Promise<{
     success: boolean
     data?: { imported: RagDocument[]; errors: string[] }
     error?: string
@@ -279,13 +277,15 @@ interface QuickSearchAPI {
 }
 
 interface WebAssistantAPI {
+  isPreview?: boolean
   start: (goal: string) => Promise<{
     success: boolean
+    runId?: string
     answer?: string
     error?: string
     steps?: WebAssistantStep[]
   }>
-  stop: () => Promise<{ success: boolean }>
+  stop: (runId?: string) => Promise<{ success: boolean; ignored?: boolean }>
   setLiveBounds: (
     bounds: { x: number; y: number; width: number; height: number } | null
   ) => Promise<{ success: boolean }>
@@ -296,11 +296,14 @@ interface WebAssistantStep {
   id: number
   thought: string
   actionLabel: string
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'thinking' | 'done' | 'error' | 'cancelled'
 }
 
 interface WebAssistantUpdate {
+  runId?: string
+  seq?: number
   state?: string
+  terminal?: boolean
   step?: number
   maxSteps?: number
   steps?: WebAssistantStep[]
@@ -357,7 +360,7 @@ declare global {
     chat: ChatAPI
     rag: RagAPI
     task: TaskAPI
-    webAssistant: WebAssistantAPI
+    webAssistant?: WebAssistantAPI
     quickSearch: QuickSearchAPI
   }
 }

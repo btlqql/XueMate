@@ -42,7 +42,14 @@ const getRoutePayload = () => {
   return null
 }
 
-const applyRoutePayload = () => {
+const normalizeConversationId = (value) => {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value).trim()
+  }
+  return ''
+}
+
+const applyRoutePayload = async () => {
   const payload = getRoutePayload()
   if (!payload) return
 
@@ -52,6 +59,12 @@ const applyRoutePayload = () => {
 
   if (typeof payload.draftPrompt === 'string') {
     chatDraft.value = payload.draftPrompt
+  }
+
+  const conversationId = normalizeConversationId(payload.conversationId)
+  if (conversationId && normalizeConversationId(activeId.value) !== conversationId) {
+    activeId.value = conversationId
+    await loadMessages(conversationId)
   }
 }
 
@@ -298,9 +311,7 @@ watch(() => [props.currentRoute, props.routePayload], applyRoutePayload, {
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="entry-secondary" @click="openWebSearchEntry">
-            资料不够？去小实验找网页
-          </button>
+          <button class="entry-secondary" @click="openWebSearchEntry">资料不够？查网页资料</button>
           <button class="entry-primary" @click="openEntry('knowledge')">导入资料</button>
         </div>
       </div>

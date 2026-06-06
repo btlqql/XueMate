@@ -42,10 +42,10 @@ const askableDocumentCount = computed(() =>
 )
 const canAskMaterials = computed(() => askableDocumentCount.value > 0)
 const askMaterialsButtonText = computed(() => {
-  if (!canAskMaterials.value) return '暂无资料可问'
-  if (resolveChatCollectionId() === 'all') return '问全部资料'
-  if (resolveChatCollectionId() === 'default') return '问默认资料'
-  return '问这份资料'
+  if (!canAskMaterials.value) return '先导入资料'
+  if (resolveChatCollectionId() === 'all') return '带全部资料去问'
+  if (resolveChatCollectionId() === 'default') return '带默认资料去问'
+  return '带这份资料去问'
 })
 const askMaterialsButtonTitle = computed(() =>
   canAskMaterials.value ? '带着当前资料去问学伴' : '请先导入资料'
@@ -127,8 +127,8 @@ async function locateDocument(source) {
 <template>
   <div class="fade-in">
     <div class="page-header">
-      <h1 class="page-title">我的资料</h1>
-      <p class="page-desc">课件、笔记、作业要求都放在这里，后面查找起来更省事</p>
+      <h1 class="page-title">资料库</h1>
+      <p class="page-desc">课件、笔记、作业要求都放在这里，问学伴时优先用这些资料回答</p>
     </div>
 
     <!-- 资料夹 -->
@@ -136,7 +136,9 @@ async function locateDocument(source) {
       <div class="collection-head">
         <div>
           <h2 class="section-title">资料夹</h2>
-          <p class="collection-desc">按科目分开放，比如语文、数学、英语，找资料时不容易混在一起。</p>
+          <p class="collection-desc">
+            按科目分开放，比如语文、数学、英语，找资料时不容易混在一起。
+          </p>
         </div>
         <form class="create-form" @submit.prevent="createCollection">
           <input
@@ -213,7 +215,7 @@ async function locateDocument(source) {
         </div>
         <div class="import-actions">
           <button class="btn btn-primary" :disabled="importing" @click="selectAndImport">
-            {{ importing ? '导入中...' : '选择资料' }}
+            {{ importing ? '导入中...' : '导入资料' }}
           </button>
           <button
             class="btn btn-secondary ask-material-btn"
@@ -312,14 +314,14 @@ async function locateDocument(source) {
           <span class="step-num">3</span>
           <div>
             <strong>整理资料</strong>
-              <p>长资料会按段落整理好，后面提问时更容易找到原文。</p>
+            <p>长资料会按段落整理好，后面提问时更容易找到原文。</p>
           </div>
         </div>
         <div class="step">
           <span class="step-num">4</span>
           <div>
-            <strong>聊天时选择资料</strong>
-              <p>聊天页可以按资料夹提问，也可以临时不用资料。</p>
+            <strong>带资料去问</strong>
+            <p>去问学伴时可以选择这个资料夹，也可以临时不用资料。</p>
           </div>
         </div>
       </div>
@@ -358,7 +360,9 @@ async function locateDocument(source) {
   padding: 10px 12px;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .collection-input:focus {
@@ -395,7 +399,9 @@ async function locateDocument(source) {
 .collection-item.active {
   border-color: var(--xm-green);
   background: #edf9ef;
-  box-shadow: inset 0 0 0 1px rgba(88, 204, 2, 0.18), var(--xm-shadow-sm);
+  box-shadow:
+    inset 0 0 0 1px rgba(88, 204, 2, 0.18),
+    var(--xm-shadow-sm);
 }
 
 .collection-name {

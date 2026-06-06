@@ -10,10 +10,12 @@ defineProps({
   backgroundResult: { type: Object, default: null },
   quickSearchHistory: { type: Array, default: () => [] },
   quickSearchHistoryLoading: Boolean,
-  searchSamples: { type: Array, default: () => [] }
+  searchSamples: { type: Array, default: () => [] },
+  canReturnToChat: Boolean,
+  returnLabel: { type: String, default: '带回问学伴' }
 })
 
-const emit = defineEmits(['update:searchInput', 'search', 'sample'])
+const emit = defineEmits(['update:searchInput', 'search', 'sample', 'return-chat'])
 
 function quickSearchStatusLabel(status) {
   if (status === 'done') return '完成'
@@ -103,15 +105,25 @@ function formatHistoryTime(timestamp) {
     <section class="card result-card" v-if="searchResult">
       <div class="result-head">
         <h2 class="section-title">查到的内容</h2>
-        <div
-          class="mode-badge"
-          :class="searchResult.mode === 'web' || searchResult.mode === 'cloud' ? 'web' : 'local'"
-        >
-          {{
-            searchResult.mode === 'web' || searchResult.mode === 'cloud'
-              ? '网页整理结果'
-              : '本地网页查询'
-          }}
+        <div class="result-actions">
+          <button
+            class="btn btn-primary btn-sm"
+            type="button"
+            :disabled="!canReturnToChat"
+            @click="emit('return-chat')"
+          >
+            {{ returnLabel }}
+          </button>
+          <div
+            class="mode-badge"
+            :class="searchResult.mode === 'web' || searchResult.mode === 'cloud' ? 'web' : 'local'"
+          >
+            {{
+              searchResult.mode === 'web' || searchResult.mode === 'cloud'
+                ? '网页整理结果'
+                : '本地网页查询'
+            }}
+          </div>
         </div>
       </div>
       <div class="resource-meta" v-if="searchResult.elapsedMs || searchResult.cacheHit">
@@ -214,7 +226,7 @@ function formatHistoryTime(timestamp) {
       <div class="feature-grid">
         <div class="feature">
           <strong>找练习题</strong>
-          <p>比如数学口算、英语单词、科学小实验。</p>
+          <p>比如数学口算、英语单词、科学探究资料。</p>
         </div>
         <div class="feature">
           <strong>解释知识点</strong>
