@@ -1,5 +1,7 @@
 import 'dotenv/config'
+import './services/consolePipeGuard'
 import { app, shell, BrowserWindow, ipcMain, dialog, Notification } from 'electron'
+import { randomUUID } from 'crypto'
 import { join, basename } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -37,13 +39,53 @@ import * as rag from './services/rag'
 import { buildLearningGraph } from './services/learningGraph'
 import { startRendererBridge, stopRendererBridge } from './services/rendererBridge'
 import * as taskStore from './services/taskStore'
+import * as quickSearchStore from './services/quickSearchStore'
 import { ensureEnoughText, extractTextFromFile } from './services/document'
+import type { NewTask, TaskEditableFields } from './domain/task'
+import type { QuickSearchFilters } from './domain/quickSearch'
 
 // 启动时自动迁移旧数据
 let agentRunning = false
 let webAssistantRunning = false
 
 let confirmResolve: ((approved: boolean) => void) | null = null
+
+type ChatStreamEventType = 'token' | 'done' | 'error'
+
+interface ChatStreamEvent<T = unknown> {
+  requestId: string
+  convId: string
+  source: 'chat'
+  type: ChatStreamEventType
+  payload: T
+  ts: number
+}
+
+function createChatRequestId(): string {
+  return `chat_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function createQuickSearchRunId(): string {
+  return `qsrun_${Date.now()}_${randomUUID()}`
+}
+
+function sendChatStreamEvent<T>(
+  win: BrowserWindow | null,
+  event: Omit<ChatStreamEvent<T>, 'source' | 'ts'>
+): void {
+  if (!win || win.isDestroyed()) return
+  win.webContents.send('chat:stream-event', {
+    ...event,
+    source: 'chat',
+    ts: Date.now()
+  } satisfies ChatStreamEvent<T>)
+}
+
+function getErrorMessage(error: unknown, fallback = '未知错误'): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -88,9 +130,9 @@ function registerLLMHandlers(): void {
       const result = await parseTask(text)
       console.log('[Main] parseTask success, length:', result.length)
       return { success: true, data: result }
-    } catch (error: any) {
-      console.error('[Main] parseTask error:', error.message)
-      return { success: false, error: error.message }
+    } catch (error) {
+      console.error('[Main] parseTask error:', getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -99,8 +141,8 @@ function registerLLMHandlers(): void {
     try {
       const result = await tutorCode(code, type)
       return { success: true, data: result }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -112,8 +154,8 @@ function registerLLMHandlers(): void {
       try {
         const result = await judgeCode(problem, code, language)
         return { success: true, data: result }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -124,8 +166,8 @@ function registerLLMHandlers(): void {
     try {
       const result = await generateProblems(topic, count)
       return { success: true, data: result }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -166,9 +208,9 @@ function registerLLMHandlers(): void {
           formatCheck: JSON.parse(formatResult)
         })
       }
-    } catch (error: any) {
-      console.error('[Main] checkPDF error:', error.message)
-      return { success: false, error: error.message }
+    } catch (error) {
+      console.error('[Main] checkPDF error:', getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -177,8 +219,8 @@ function registerLLMHandlers(): void {
     try {
       const result = await generateReview(courseName)
       return { success: true, data: result }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -285,11 +327,43 @@ function registerLLMHandlers(): void {
     return { success: true }
   })
 
-  ipcMain.handle('quickSearch:run', async (_event, query: string) => {
+  ipcMain.handle('quickSearch:run', async (event, query: string) => {
+    const runId = createQuickSearchRunId()
     try {
-      return { success: true, data: await quickSearch(query) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+      const data = await quickSearch(query)
+      const foregroundRecord = quickSearchStore.saveResult({
+        runId,
+        query: data.query,
+        kind: 'foreground',
+        result: data
+      })
+      return { success: true, data, runId, recordId: foregroundRecord.id }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error), runId }
+    }
+  })
+
+  ipcMain.handle('quickSearch:history', async (_event, filters?: QuickSearchFilters) => {
+    try {
+      return { success: true, data: quickSearchStore.list(filters || { limit: 5 }) }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle('quickSearch:get', async (_event, id: string) => {
+    try {
+      return { success: true, data: quickSearchStore.get(id) }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle('quickSearch:delete', async (_event, id: string) => {
+    try {
+      return { success: true, data: quickSearchStore.deleteRecord(id) }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -299,8 +373,8 @@ function registerLLMHandlers(): void {
     try {
       const conversations = chatStore.getConversations()
       return { success: true, data: conversations }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -308,8 +382,8 @@ function registerLLMHandlers(): void {
     try {
       const conv = chatStore.getConversation(id)
       return { success: true, data: conv }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -317,8 +391,8 @@ function registerLLMHandlers(): void {
     try {
       const id = chatStore.createConversation()
       return { success: true, data: id }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -326,16 +400,22 @@ function registerLLMHandlers(): void {
     try {
       const ok = chatStore.deleteConversation(id)
       return { success: ok }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
   ipcMain.handle(
     'chat:sendMessage',
-    async (event, convId: string, content: string, options?: { collectionId?: string }) => {
+    async (
+      event,
+      convId: string,
+      content: string,
+      options?: { collectionId?: string; requestId?: string }
+    ) => {
       console.log('[Main] chat:sendMessage called, convId:', convId, 'model:', MODEL)
       const win = BrowserWindow.fromWebContents(event.sender)
+      const requestId = options?.requestId || createChatRequestId()
 
       try {
         // 1. 保存用户消息
@@ -389,9 +469,12 @@ function registerLLMHandlers(): void {
           temperature: 0.7,
           maxTokens: 4096,
           onToken(token) {
-            if (win && !win.isDestroyed()) {
-              win.webContents.send('chat:stream-token', token)
-            }
+            sendChatStreamEvent(win, {
+              requestId,
+              convId,
+              type: 'token',
+              payload: token
+            })
           },
           onDone(fullContent) {
             // 保存 AI 回复
@@ -408,9 +491,12 @@ function registerLLMHandlers(): void {
             } catch (e) {
               console.error('[Chat] 保存流式回复失败:', e)
             }
-            if (win && !win.isDestroyed()) {
-              win.webContents.send('chat:stream-done', fullContent)
-            }
+            sendChatStreamEvent(win, {
+              requestId,
+              convId,
+              type: 'done',
+              payload: fullContent
+            })
             // 后台异步提取记忆 → 压缩归档（fire-and-forget）
             extractMemory(recentMessages, memory)
               .then((updated) => {
@@ -420,17 +506,33 @@ function registerLLMHandlers(): void {
               .catch((e) => console.error('[Memory] 后台处理失败:', e))
           },
           onError(error) {
-            if (win && !win.isDestroyed()) {
-              win.webContents.send('chat:stream-error', error)
-            }
+            sendChatStreamEvent(win, {
+              requestId,
+              convId,
+              type: 'error',
+              payload: error
+            })
           }
+        }).catch((error: unknown) => {
+          sendChatStreamEvent(win, {
+            requestId,
+            convId,
+            type: 'error',
+            payload: getErrorMessage(error)
+          })
         })
 
         // 立即返回，不等待 LLM 完成
-        return { success: true, streaming: true }
-      } catch (error: any) {
-        console.error('[Main] chat:sendMessage error:', error.message)
-        return { success: false, error: error.message }
+        return { success: true, streaming: true, requestId }
+      } catch (error) {
+        console.error('[Main] chat:sendMessage error:', getErrorMessage(error))
+        sendChatStreamEvent(win, {
+          requestId,
+          convId,
+          type: 'error',
+          payload: getErrorMessage(error, '发送消息失败')
+        })
+        return { success: false, error: getErrorMessage(error), requestId }
       }
     }
   )
@@ -439,8 +541,8 @@ function registerLLMHandlers(): void {
     try {
       const memory = getMemory()
       return { success: true, data: memory }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -449,16 +551,16 @@ function registerLLMHandlers(): void {
   ipcMain.handle('rag:collections', async () => {
     try {
       return { success: true, data: rag.getCollections() }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
   ipcMain.handle('rag:createCollection', async (_event, name: string, description = '') => {
     try {
       return { success: true, data: rag.createCollection(name, description) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -474,9 +576,9 @@ function registerLLMHandlers(): void {
         collectionId || rag.DEFAULT_COLLECTION_ID
       )
       return { success: true, data: doc }
-    } catch (error: any) {
-      console.error('[Main] rag:importFile error:', error.message)
-      return { success: false, error: error.message }
+    } catch (error) {
+      console.error('[Main] rag:importFile error:', getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -514,8 +616,8 @@ function registerLLMHandlers(): void {
 
         const doc = await rag.importDocument(fileName, text, undefined, targetCollectionId)
         imported.push(doc)
-      } catch (e: any) {
-        errors.push(`${basename(filePath)}: ${e.message}`)
+      } catch (e) {
+        errors.push(`${basename(filePath)}: ${getErrorMessage(e)}`)
       }
     }
 
@@ -525,8 +627,8 @@ function registerLLMHandlers(): void {
   ipcMain.handle('rag:documents', async (_event, collectionId?: string) => {
     try {
       return { success: true, data: rag.getDocuments(collectionId) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -534,24 +636,24 @@ function registerLLMHandlers(): void {
     try {
       const ok = rag.deleteDocument(docId)
       return { success: ok }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
   ipcMain.handle('rag:stats', async (_event, collectionId?: string) => {
     try {
       return { success: true, data: rag.getStats(collectionId) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
   ipcMain.handle('rag:learningGraph', async (_event, collectionId?: string) => {
     try {
       return { success: true, data: buildLearningGraph(collectionId) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
@@ -560,40 +662,40 @@ function registerLLMHandlers(): void {
   ipcMain.handle('task:getAll', async () => {
     try {
       return { success: true, data: taskStore.getTasks() }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
-  ipcMain.handle('task:add', async (_event, tasks: any[]) => {
+  ipcMain.handle('task:add', async (_event, tasks: NewTask[]) => {
     try {
       return { success: true, data: taskStore.addTasks(tasks) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
-  ipcMain.handle('task:update', async (_event, id: string, fields: Record<string, any>) => {
+  ipcMain.handle('task:update', async (_event, id: string, fields: Partial<TaskEditableFields>) => {
     try {
       return { success: true, data: taskStore.updateTask(id, fields) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
   ipcMain.handle('task:delete', async (_event, id: string) => {
     try {
       return { success: true, data: taskStore.deleteTask(id) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 
   ipcMain.handle('task:toggle', async (_event, id: string) => {
     try {
       return { success: true, data: taskStore.toggleTask(id) }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 }

@@ -1,7 +1,12 @@
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import KnowledgeGraph from '../components/KnowledgeGraph.vue'
-import { formatKnowledgeDate as formatDate, useKnowledgeBase } from '../composables/useKnowledgeBase'
+import {
+  formatKnowledgeDate as formatDate,
+  useKnowledgeBase
+} from '../composables/useKnowledgeBase'
+
+const emit = defineEmits(['navigate'])
 
 const {
   collections,
@@ -32,6 +37,52 @@ const docRefs = ref({})
 const locatedDocId = ref('')
 const locatedArticle = ref(null)
 
+const askableDocumentCount = computed(() =>
+  Number(stats.value?.docCount || documents.value.length || 0)
+)
+const canAskMaterials = computed(() => askableDocumentCount.value > 0)
+const askMaterialsButtonText = computed(() => {
+  if (!canAskMaterials.value) return '暂无资料可问'
+  if (resolveChatCollectionId() === 'all') return '问全部资料'
+  if (resolveChatCollectionId() === 'default') return '问默认资料'
+  return '问这份资料'
+})
+const askMaterialsButtonTitle = computed(() =>
+  canAskMaterials.value ? '带着当前资料去问学伴' : '请先导入资料'
+)
+
+function resolveChatCollectionId() {
+  return activeCollectionId.value || 'default'
+}
+
+function resolveChatCollectionName(collectionId) {
+  if (collectionId === 'all') return '全部资料'
+  if (activeCollection.value?.name) return activeCollection.value.name
+  if (collectionId === 'default') return '默认资料夹'
+  return '当前资料夹'
+}
+
+function buildMaterialDraftPrompt() {
+  const collectionId = resolveChatCollectionId()
+  const collectionName = resolveChatCollectionName(collectionId)
+  const docCount = askableDocumentCount.value
+  const sourceText = docCount > 0 ? `${collectionName}（${docCount} 份资料）` : collectionName
+
+  return `请基于「${sourceText}」回答我的问题：`
+}
+
+function askCurrentMaterials() {
+  const collectionId = resolveChatCollectionId()
+
+  emit('navigate', {
+    view: 'chat',
+    payload: {
+      collectionId,
+      draftPrompt: buildMaterialDraftPrompt()
+    }
+  })
+}
+
 function setDocRef(id, el) {
   if (!id) return
   if (el) docRefs.value[id] = el
@@ -61,7 +112,10 @@ async function locateDocument(source) {
   locatedArticle.value = {
     ...source,
     documentId,
-    fileName: source.fileName || documents.value.find((doc) => doc.id === documentId)?.fileName || '关联资料'
+    fileName:
+      source.fileName ||
+      documents.value.find((doc) => doc.id === documentId)?.fileName ||
+      '关联资料'
   }
 
   await nextTick()
@@ -157,9 +211,20 @@ async function locateDocument(source) {
             <p class="import-hint">支持 PDF、TXT、MD，可以一次选多个文件</p>
           </div>
         </div>
-        <button class="btn btn-primary" :disabled="importing" @click="selectAndImport">
-          {{ importing ? '导入中...' : '选择资料' }}
-        </button>
+        <div class="import-actions">
+          <button class="btn btn-primary" :disabled="importing" @click="selectAndImport">
+            {{ importing ? '导入中...' : '选择资料' }}
+          </button>
+          <button
+            class="btn btn-secondary ask-material-btn"
+            type="button"
+            :disabled="!canAskMaterials"
+            :title="askMaterialsButtonTitle"
+            @click="askCurrentMaterials"
+          >
+            {{ askMaterialsButtonText }}
+          </button>
+        </div>
       </div>
       <div v-if="error" class="error-msg">{{ error }}</div>
     </div>
@@ -390,6 +455,12 @@ async function locateDocument(source) {
   gap: 16px;
 }
 
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .import-info {
   display: flex;
   align-items: center;
@@ -405,6 +476,13 @@ async function locateDocument(source) {
   font-size: 13px;
   color: var(--xm-text-muted);
   margin-top: 2px;
+}
+
+.ask-material-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
 }
 
 .doc-list {

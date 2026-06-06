@@ -83,6 +83,31 @@ db.exec(`
     reminded_24h INTEGER NOT NULL DEFAULT 0,
     reminded_1h INTEGER NOT NULL DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS quick_search_results (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    query TEXT NOT NULL,
+    normalized_query TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('foreground','background')),
+    status TEXT NOT NULL CHECK(status IN ('done','error','skipped')),
+    mode TEXT,
+    task_id TEXT,
+    summary TEXT DEFAULT '',
+    result_json TEXT DEFAULT '{}',
+    error TEXT DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_quick_search_results_run
+    ON quick_search_results(run_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_quick_search_results_query
+    ON quick_search_results(normalized_query, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_quick_search_results_recent
+    ON quick_search_results(updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_quick_search_results_kind_status
+    ON quick_search_results(kind, status, updated_at DESC);
 `)
 
 function hasColumn(table: string, column: string): boolean {

@@ -1,19 +1,29 @@
 import { checkSearchSafety, summarizeResults } from './agent'
-import { searchCloudLearningResources, getCloudBaseUrl, type CloudResourceScores } from './cloud'
 import { searchAndFetch } from './web'
+
+export interface QuickSearchSourceScore {
+  relevance: number
+  readability: number
+  ageFit: number
+  trust: number
+  adNoise: number
+  overall: number
+  level: string
+  reason: string
+}
 
 export interface QuickSearchSource {
   title: string
   url: string
   text: string
-  scores?: CloudResourceScores
+  scores?: QuickSearchSourceScore
   level?: string
 }
 
 export interface QuickSearchResult {
   query: string
   summary: string
-  mode: 'cloud' | 'local'
+  mode: 'local'
   taskId?: string
   elapsedMs?: number
   cacheHit?: boolean
@@ -21,11 +31,14 @@ export interface QuickSearchResult {
   sources: QuickSearchSource[]
 }
 
-type QuickSearchMode = 'local' | 'cloud'
-
-function getQuickSearchMode(): QuickSearchMode {
-  const configured = (process.env.XUEMATE_QUICK_SEARCH_MODE || 'local').trim().toLowerCase()
-  return configured === 'cloud' ? 'cloud' : 'local'
+export interface QuickSearchBackgroundUpdate {
+  runId?: string
+  recordId?: string
+  query: string
+  status: 'running' | 'done' | 'error' | 'skipped'
+  message?: string
+  result?: QuickSearchResult
+  error?: string
 }
 
 export async function quickSearch(query: string): Promise<QuickSearchResult> {
@@ -37,39 +50,11 @@ export async function quickSearch(query: string): Promise<QuickSearchResult> {
     throw new Error(unsafe)
   }
 
-  const searchMode = getQuickSearchMode()
-  const cloudBaseUrl = searchMode === 'cloud' ? getCloudBaseUrl() : null
-
-  if (searchMode === 'cloud' && cloudBaseUrl) {
-    try {
-      const cloudResult = await searchCloudLearningResources(normalized, 4)
-      if (cloudResult) {
-        return {
-          query: cloudResult.query,
-          summary: cloudResult.summary,
-          mode: 'cloud',
-          taskId: cloudResult.taskId,
-          elapsedMs: cloudResult.elapsedMs,
-          cacheHit: cloudResult.cacheHit,
-          stages: cloudResult.stages,
-          sources: cloudResult.sources.map((source) => ({
-            title: source.title,
-            url: source.url,
-            text: source.text.slice(0, 700),
-            scores: source.scores,
-            level: source.level
-          }))
-        }
-      }
-    } catch (error: any) {
-      console.warn('[QuickSearch] 云端不可用，回退到本地搜索:', error.message || error)
-    }
-  }
-
   return quickSearchLocal(normalized)
 }
 
 async function quickSearchLocal(normalized: string): Promise<QuickSearchResult> {
+  const startAt = Date.now()
   const pages = await searchAndFetch(normalized)
   const sources = pages.slice(0, 4).map((page) => ({
     title: page.title || '网页',
@@ -79,5 +64,21 @@ async function quickSearchLocal(normalized: string): Promise<QuickSearchResult> 
 
   const rawText = sources.map((page) => `【${page.title}】${page.url}\n${page.text}`).join('\n\n')
   const summary = await summarizeResults(normalized, rawText)
-  return { query: normalized, summary, mode: 'local', sources }
+  const elapsedMs = Date.now() - startAt
+
+  return {
+    query: normalized,
+    summary,
+    mode: 'local',
+    elapsedMs,
+    stages: [
+      {
+        name: 'local-web-search',
+        status: 'done',
+        detail: `本地网页查询完成，整理 ${sources.length} 条参考资料`,
+        at: new Date().toISOString()
+      }
+    ],
+    sources
+  }
 }

@@ -78,14 +78,14 @@ XueMate 的资料问答已经从简单的「向量 TopK」升级为专家版 Hyb
 
 内部可复现 benchmark 数据：
 
-| Metric | Dense TopK Baseline | Hybrid RAG | Lift |
-|---|---:|---:|---:|
-| Recall@K | 93.33% | 96.67% | +3.57% |
-| Precision@K | 46.67% | 50.00% | +7.14% |
-| nDCG@K | 89.40% | 97.04% | +8.55% |
-| Context Waste | 53.33% | 50.00% | -6.25% |
-| MRR | 95.00% | 100.00% | +5.26% |
-| Context Compression vs full corpus | - | 82.14% less input | - |
+| Metric                             | Dense TopK Baseline |        Hybrid RAG |   Lift |
+| ---------------------------------- | ------------------: | ----------------: | -----: |
+| Recall@K                           |              93.33% |            96.67% | +3.57% |
+| Precision@K                        |              46.67% |            50.00% | +7.14% |
+| nDCG@K                             |              89.40% |            97.04% | +8.55% |
+| Context Waste                      |              53.33% |            50.00% | -6.25% |
+| MRR                                |              95.00% |           100.00% | +5.26% |
+| Context Compression vs full corpus |                   - | 82.14% less input |      - |
 
 Run the benchmark:
 
@@ -111,13 +111,13 @@ XueMate 的长期记忆系统也升级为专家版 Memory Atom 架构：
 
 内部可复现 benchmark 数据：
 
-| Metric | Flat Memory Baseline | Atom Memory | Lift |
-|---|---:|---:|---:|
-| Prompt items | 18 | 11 | -38.89% |
-| Prompt chars | 531 | 333 | -37.29% |
-| Duplicate facts | 5 | 0 | -100% |
-| Stale facts | 2 | 0 | -100% |
-| Review queue coverage | 0% | 100% | +100% |
+| Metric                | Flat Memory Baseline | Atom Memory |    Lift |
+| --------------------- | -------------------: | ----------: | ------: |
+| Prompt items          |                   18 |          11 | -38.89% |
+| Prompt chars          |                  531 |         333 | -37.29% |
+| Duplicate facts       |                    5 |           0 |   -100% |
+| Stale facts           |                    2 |           0 |   -100% |
+| Review queue coverage |                   0% |        100% |   +100% |
 
 Run the benchmark:
 
@@ -131,34 +131,17 @@ Detailed design and methodology:
 - `docs/benchmarks/memory-benchmark-2026-05-29.json`
 - `docs/benchmarks/expert-metrics-2026-05-29.json`
 
-## XueMate Cloud Vendor Stack
+## XueMate Local Web Search
 
-云端采用轻量网络微服务栈，去掉了 Crawl4AI 重型浏览器镜像，避免演示现场首次拉取过慢：
+快速查资料已收敛为本地网页查询链路，不再维护外部搜索网关、Docker 搜索栈或 Crawl4AI vendor 目录：
 
-- `/Users/wangyue/wangyue/XueMate/cloud/services/search/searxng`：搜索聚合源码。
-- `/Users/wangyue/wangyue/XueMate/cloud/gateway/server.mjs`：XueMate Cloud Gateway，负责任务编排、缓存、网页抽取、质量评分和指标。
-
-启动轻量云端微服务：
-
-```bash
-npm run cloud:docker
-```
-
-服务器/高性能机器可以启动全量云端微服务（Crawl4AI 使用 basic-amd64 镜像）：
-
-```bash
-npm run cloud:docker:full
-```
-
-只启动 Gateway 调试：
-
-```bash
-npm run cloud:dev
-```
+- Electron 主进程通过 `/Users/wangyue/wangyue/XueMate/src/main/services/web.ts` 打开搜索页并抓取正文。
+- `/Users/wangyue/wangyue/XueMate/src/main/services/quickSearch.ts` 做安全检查、网页摘要和本机 SQLite 历史记录写入。
+- `.env.example` 只保留 `XUEMATE_QUICK_SEARCH_MODE=local`，演示部署不需要额外 cloud/search 服务。
 
 详细说明：
 
-- `/Users/wangyue/wangyue/XueMate/docs/CLOUD_VENDOR_STACK.md`
+- `/Users/wangyue/wangyue/XueMate/docs/WEB_SEARCH_VENDOR_STACK.md`
 
 ## Recommended IDE Setup
 

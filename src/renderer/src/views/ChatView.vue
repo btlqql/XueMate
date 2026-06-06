@@ -1,8 +1,13 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import ChatSidebar from '../components/ChatSidebar.vue'
 import ChatMessages from '../components/ChatMessages.vue'
 import ChatInput from '../components/ChatInput.vue'
+
+const props = defineProps({
+  currentRoute: { type: [String, Object], default: '' },
+  routePayload: { type: Object, default: null }
+})
 
 const conversations = ref([])
 const activeId = ref(null)
@@ -12,22 +17,64 @@ const sidebarCollapsed = ref(false)
 const streamingContent = ref('')
 const ragCollections = ref([])
 const ragCollectionId = ref('all')
+const chatDraft = ref('')
 const emit = defineEmits(['navigate'])
 
 // 流式监听器 cleanup
-let cleanupToken = null
-let cleanupDone = null
-let cleanupError = null
+let cleanupStreamEvent = null
 
 function cleanupStreamListeners() {
-  cleanupToken?.()
-  cleanupDone?.()
-  cleanupError?.()
-  cleanupToken = cleanupDone = cleanupError = null
+  cleanupStreamEvent?.()
+  cleanupStreamEvent = null
 }
 
 const openEntry = (view) => {
   emit('navigate', view)
+}
+
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+const getRoutePayload = () => {
+  if (isRecord(props.routePayload)) return props.routePayload
+  if (isRecord(props.currentRoute) && isRecord(props.currentRoute.payload)) {
+    return props.currentRoute.payload
+  }
+  return null
+}
+
+const applyRoutePayload = () => {
+  const payload = getRoutePayload()
+  if (!payload) return
+
+  if (typeof payload.collectionId === 'string' && payload.collectionId.trim()) {
+    ragCollectionId.value = payload.collectionId.trim()
+  }
+
+  if (typeof payload.draftPrompt === 'string') {
+    chatDraft.value = payload.draftPrompt
+  }
+}
+
+const getRecentUserQuestion = () => {
+  for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+    const message = messages.value[index]
+    if (message?.role === 'user' && typeof message.content === 'string') {
+      const content = message.content.trim()
+      if (content) return content
+    }
+  }
+  return ''
+}
+
+const openWebSearchEntry = () => {
+  emit('navigate', {
+    view: 'agent',
+    mode: 'search',
+    payload: {
+      draftPrompt: chatDraft.value.trim() || getRecentUserQuestion(),
+      conversationId: activeId.value
+    }
+  })
 }
 
 // 加载会话列表
@@ -138,46 +185,55 @@ const sendMessage = async (text) => {
     timestamp: Date.now()
   })
 
+  const requestId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+
   // 注册流式监听器
   cleanupStreamListeners()
 
-  cleanupToken = window.chat.onStreamToken((token) => {
-    // 会话已切换，忽略旧流的 token
-    if (activeId.value !== sentConvId) return
-    streamingContent.value += token
-    const lastMsg = messages.value[messages.value.length - 1]
-    if (lastMsg && lastMsg.id === aiMsgId) {
-      lastMsg.content = streamingContent.value
-    }
-  })
+  cleanupStreamEvent = window.chat.onStreamEvent(async (event) => {
+    if (!event || event.requestId !== requestId || event.convId !== sentConvId) return
 
-  cleanupDone = window.chat.onStreamDone(async () => {
-    cleanupStreamListeners()
-    streamingContent.value = ''
-    loading.value = false
-    // 会话已切换，只刷新侧边栏，不碰 messages
-    if (activeId.value !== sentConvId) {
+    if (event.type === 'token') {
+      // 会话已切换，忽略旧流的 token
+      if (activeId.value !== sentConvId) return
+      streamingContent.value += String(event.payload || '')
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.id === aiMsgId) {
+        lastMsg.content = streamingContent.value
+      }
+      return
+    }
+
+    if (event.type === 'done') {
+      cleanupStreamListeners()
+      streamingContent.value = ''
+      loading.value = false
+      // 会话已切换，只刷新侧边栏，不碰 messages
+      if (activeId.value !== sentConvId) {
+        await loadConversations()
+        return
+      }
       await loadConversations()
       return
     }
-    await loadConversations()
-  })
 
-  cleanupError = window.chat.onStreamError((error) => {
-    cleanupStreamListeners()
-    streamingContent.value = ''
-    loading.value = false
-    if (activeId.value !== sentConvId) return
-    const lastMsg = messages.value[messages.value.length - 1]
-    if (lastMsg && lastMsg.id === aiMsgId) {
-      lastMsg.content = '抱歉，出现了错误：' + error
+    if (event.type === 'error') {
+      cleanupStreamListeners()
+      streamingContent.value = ''
+      loading.value = false
+      if (activeId.value !== sentConvId) return
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.id === aiMsgId) {
+        lastMsg.content = '抱歉，出现了错误：' + (event.payload || '未知错误')
+      }
     }
   })
 
   // 调用 IPC（现在立即返回，不等待 LLM 完成）
   try {
     const result = await window.chat.sendMessage(sentConvId, text, {
-      collectionId: ragCollectionId.value
+      collectionId: ragCollectionId.value,
+      requestId
     })
     if (!result.success) {
       cleanupStreamListeners()
@@ -206,13 +262,18 @@ onMounted(() => {
   loadRagCollections()
 })
 onUnmounted(cleanupStreamListeners)
+
+watch(() => [props.currentRoute, props.routePayload], applyRoutePayload, {
+  immediate: true,
+  deep: true
+})
 </script>
 
 <template>
   <div class="chat-view">
     <ChatSidebar
       :conversations="conversations"
-      :activeId="activeId"
+      :active-id="activeId"
       :collapsed="sidebarCollapsed"
       @new="newConversation"
       @select="selectConversation"
@@ -236,7 +297,12 @@ onUnmounted(cleanupStreamListeners)
             </option>
           </select>
         </div>
-        <button class="entry-primary" @click="openEntry('knowledge')">导入资料</button>
+        <div class="toolbar-actions">
+          <button class="entry-secondary" @click="openWebSearchEntry">
+            资料不够？去小实验找网页
+          </button>
+          <button class="entry-primary" @click="openEntry('knowledge')">导入资料</button>
+        </div>
       </div>
       <ChatMessages
         :messages="messages"
@@ -244,7 +310,7 @@ onUnmounted(cleanupStreamListeners)
         @send="sendMessage"
         @open-entry="openEntry"
       />
-      <ChatInput :disabled="loading" @send="sendMessage" />
+      <ChatInput v-model="chatDraft" :disabled="loading" @send="sendMessage" />
     </div>
   </div>
 </template>
@@ -316,18 +382,41 @@ onUnmounted(cleanupStreamListeners)
   border-color: var(--xm-green);
 }
 
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.entry-secondary,
 .entry-primary {
   border: none;
   border-radius: 999px;
-  background: var(--xm-green);
-  color: white;
-  box-shadow: 0 2px 0 var(--xm-green-dark);
   padding: 7px 14px;
   font-size: 13px;
   font-weight: 900;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+}
+
+.entry-secondary {
+  border: 1px solid #d6ead0;
+  background: #f4fbf1;
+  color: #2f7a12;
+}
+
+.entry-secondary:hover {
+  border-color: var(--xm-green);
+  background: #eef9e8;
+  transform: translateY(-1px);
+}
+
+.entry-primary {
+  background: var(--xm-green);
+  color: white;
+  box-shadow: 0 2px 0 var(--xm-green-dark);
 }
 
 .entry-primary:hover {
@@ -339,6 +428,11 @@ onUnmounted(cleanupStreamListeners)
   .chat-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
 }
 </style>
