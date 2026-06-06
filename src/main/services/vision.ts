@@ -16,7 +16,7 @@ const VISION_BASE_URL =
 const VISION_MODEL =
   process.env.VISION_MODEL ||
   (isGoogleVertexProvider()
-    ? process.env.GOOGLE_VERTEX_VISION_MODEL || 'gemini-2.5-flash'
+    ? process.env.GOOGLE_VERTEX_VISION_MODEL || 'gemini-3.5-flash'
     : 'gemini-2.5-flash')
 const VISION_FALLBACK_MODELS =
   process.env.VISION_FALLBACK_MODELS || process.env.GOOGLE_VERTEX_VISION_FALLBACK_MODELS || ''
@@ -159,9 +159,9 @@ async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T
 
 function buildModelList(primaryModel: string): string[] {
   const defaults = isGoogleVertexProvider()
-    ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
+    ? ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash']
     : isGoogleVisionEndpoint()
-      ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
+      ? ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash']
       : []
   const configuredFallbacks = VISION_FALLBACK_MODELS.split(',')
     .map((item) => item.trim())

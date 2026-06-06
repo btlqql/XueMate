@@ -28,8 +28,8 @@ gcloud config set project YOUR_PROJECT_ID
 VISION_PROVIDER=google-vertex
 GOOGLE_VERTEX_PROJECT=YOUR_PROJECT_ID
 GOOGLE_VERTEX_LOCATION=global
-GOOGLE_VERTEX_VISION_MODEL=gemini-2.5-flash
-GOOGLE_VERTEX_VISION_FALLBACK_MODELS=gemini-2.5-flash-lite
+GOOGLE_VERTEX_VISION_MODEL=gemini-3.5-flash
+GOOGLE_VERTEX_VISION_FALLBACK_MODELS=gemini-3.1-pro-preview,gemini-3.1-flash-lite,gemini-2.5-flash
 ```
 
 然后重启：
@@ -50,7 +50,8 @@ Computer Use 需要输出动作 JSON：
 
 本机实测：
 
-- `gemini-2.5-flash`：可做截图/文本理解并返回 JSON。
+- `gemini-3.5-flash`：最新 Flash，实测可做截图/文本理解并返回 JSON。
+- `gemini-3.1-pro-preview` / `gemini-3.1-flash-lite` / `gemini-2.5-flash`：作为兜底。
 - `gemini-2.5-flash-image` / `gemini-3-pro-image-preview`：TEXT-only JSON 请求会被 Vertex 拒绝；它们需要 `responseModalities: ["TEXT", "IMAGE"]`。
 
 ## 凭证优先级

@@ -4,7 +4,7 @@ import { spawnSync } from 'child_process'
 import { createSign } from 'crypto'
 
 const DEFAULT_LOCATION = 'global'
-const DEFAULT_VERTEX_VISION_MODEL = 'gemini-2.5-flash'
+const DEFAULT_VERTEX_VISION_MODEL = 'gemini-3.5-flash'
 const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 const METADATA_TOKEN_URL =
   'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token'
