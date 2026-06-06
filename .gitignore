@@ -7,3 +7,5 @@ out
 .env
 .env.local
 .env.*.local
+mcp-gateway-rs/target/
+peer-edge-rs/target/

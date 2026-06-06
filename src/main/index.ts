@@ -18,14 +18,15 @@ import {
   PRO_MODEL
 } from './services/llm'
 import { runAgent } from './services/agent'
-import { runWebAssistant } from './services/computerUse'
+import { runWebAssistant, type WebAssistantUpdate } from './services/computerUse'
 import { quickSearch } from './services/quickSearch'
 import {
   destroyWebView,
   setHostWindow,
   showBrowserAtHeight,
   hideBrowser,
-  setLiveBrowserBounds
+  setLiveBrowserBounds,
+  stopActiveBrowserLoading
 } from './services/web'
 import * as chatStore from './services/chatStore'
 import {
@@ -38,6 +39,7 @@ import {
 import * as rag from './services/rag'
 import { buildLearningGraph } from './services/learningGraph'
 import { startRendererBridge, stopRendererBridge } from './services/rendererBridge'
+import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdgeRuntime'
 import * as taskStore from './services/taskStore'
 import * as quickSearchStore from './services/quickSearchStore'
 import { ensureEnoughText, extractTextFromFile } from './services/document'
@@ -46,7 +48,12 @@ import type { QuickSearchFilters } from './domain/quickSearch'
 
 // 启动时自动迁移旧数据
 let agentRunning = false
-let webAssistantRunning = false
+let webAssistantRun: {
+  id: string
+  win: BrowserWindow | null
+  stopRequested: boolean
+  seq: number
+} | null = null
 
 let confirmResolve: ((approved: boolean) => void) | null = null
 
@@ -67,6 +74,10 @@ function createChatRequestId(): string {
 
 function createQuickSearchRunId(): string {
   return `qsrun_${Date.now()}_${randomUUID()}`
+}
+
+function createWebAssistantRunId(): string {
+  return `warun_${Date.now()}_${randomUUID()}`
 }
 
 function sendChatStreamEvent<T>(
@@ -299,26 +310,72 @@ function registerLLMHandlers(): void {
 
   // 网页小助手：普通多模态模型看截图，然后控制内置浏览器
   ipcMain.handle('webAssistant:start', async (event, goal: string) => {
-    if (webAssistantRunning) return { success: false, error: '网页小助手正在执行' }
-    webAssistantRunning = true
+    if (webAssistantRun) {
+      return {
+        success: false,
+        error: webAssistantRun.stopRequested
+          ? '网页小助手正在停止，请等它完全结束后再开始'
+          : '网页小助手正在执行',
+        runId: webAssistantRun.id
+      }
+    }
+
+    const runId = createWebAssistantRunId()
     const win = BrowserWindow.fromWebContents(event.sender)
+    webAssistantRun = {
+      id: runId,
+      win,
+      stopRequested: false,
+      seq: 0
+    }
 
-    const result = await runWebAssistant(
-      goal,
-      (data) => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('webAssistant:update', data)
+    const sendRunUpdate = (data: WebAssistantUpdate) => {
+      const run = webAssistantRun
+      if (!run || run.id !== runId) return
+      run.seq += 1
+      if (win && !win.isDestroyed()) {
+        try {
+          win.webContents.send('webAssistant:update', {
+            ...data,
+            runId,
+            seq: run.seq
+          })
+        } catch (error) {
+          console.warn('[WebAssistant] update 发送失败:', getErrorMessage(error))
         }
-      },
-      () => !webAssistantRunning
-    )
+      }
+    }
 
-    webAssistantRunning = false
-    return result
+    try {
+      const result = await runWebAssistant(goal, sendRunUpdate, () => {
+        return !webAssistantRun || webAssistantRun.id !== runId || webAssistantRun.stopRequested
+      })
+      return { ...result, runId }
+    } finally {
+      if (webAssistantRun?.id === runId) {
+        webAssistantRun = null
+      }
+    }
   })
 
-  ipcMain.handle('webAssistant:stop', async () => {
-    webAssistantRunning = false
+  ipcMain.handle('webAssistant:stop', async (_event, runId?: string) => {
+    if (!webAssistantRun) return { success: true }
+    if (runId && webAssistantRun.id !== runId) {
+      return { success: true, ignored: true }
+    }
+
+    webAssistantRun.stopRequested = true
+    stopActiveBrowserLoading()
+    webAssistantRun.seq += 1
+    if (webAssistantRun.win && !webAssistantRun.win.isDestroyed()) {
+      webAssistantRun.win.webContents.send('webAssistant:update', {
+        runId: webAssistantRun.id,
+        seq: webAssistantRun.seq,
+        state: 'cancelling',
+        terminal: false,
+        error: ''
+      })
+    }
     return { success: true }
   })
 
@@ -712,6 +769,14 @@ app.whenReady().then(() => {
 
   registerLLMHandlers()
   startRendererBridge(Number(process.env.XUEMATE_RENDERER_BRIDGE_PORT || 8788))
+  const peerEdgeStatus = startPeerEdgeRuntime()
+  if (peerEdgeStatus.running) {
+    console.log(
+      `[PeerEdge] hidden runtime ready on ${peerEdgeStatus.bind}:${peerEdgeStatus.port}, group=${peerEdgeStatus.group}`
+    )
+  } else {
+    console.log(`[PeerEdge] hidden runtime inactive: ${peerEdgeStatus.reason}`)
+  }
   createWindow()
 
   // 截止日期提醒：每 10 分钟检查一次
@@ -759,8 +824,13 @@ app.whenReady().then(() => {
   })
 })
 
+app.on('before-quit', () => {
+  stopPeerEdgeRuntime()
+})
+
 app.on('window-all-closed', () => {
   destroyWebView()
+  stopPeerEdgeRuntime()
   stopRendererBridge()
   if (process.platform !== 'darwin') {
     app.quit()

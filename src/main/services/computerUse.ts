@@ -15,16 +15,23 @@ export type WebAssistantState =
   | 'idle'
   | 'opening'
   | 'looking'
+  | 'observing'
+  | 'thinking'
   | 'acting'
+  | 'settling'
+  | 'cancelling'
   | 'done'
   | 'error'
   | 'stopped'
+  | 'cancelled'
+  | 'timed_out'
+  | 'blocked'
 
 export interface WebAssistantStep {
   id: number
   thought: string
   actionLabel: string
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'thinking' | 'done' | 'error' | 'cancelled'
 }
 
 export interface WebAssistantDomCandidate {
@@ -36,6 +43,8 @@ export interface WebAssistantDomCandidate {
   center: { x: number; y: number }
   size: { width: number; height: number }
   flags: string[]
+  href?: string
+  domain?: string
 }
 
 interface ElementCandidate {
@@ -45,11 +54,12 @@ interface ElementCandidate {
 
 interface VisionActionResult {
   thought?: string
-  action?: BrowserAction & Record<string, any>
+  action?: unknown
 }
 
 export interface WebAssistantUpdate {
   state: WebAssistantState
+  terminal?: boolean
   step: number
   maxSteps: number
   steps: WebAssistantStep[]
@@ -84,6 +94,7 @@ export async function runWebAssistant(
   const sendUpdate = (patch: Partial<WebAssistantUpdate> = {}) => {
     onUpdate({
       state,
+      terminal: ['done', 'error', 'cancelled', 'timed_out', 'blocked'].includes(state),
       step: steps.length,
       maxSteps: MAX_STEPS,
       steps: steps.map((step) => ({ ...step })),
@@ -95,33 +106,52 @@ export async function runWebAssistant(
     })
   }
 
+  const cancelIfNeeded = () => {
+    if (!shouldStop()) return false
+    state = 'cancelled'
+    if (steps.length > 0 && steps[steps.length - 1].status === 'running') {
+      steps[steps.length - 1].status = 'cancelled'
+    }
+    sendUpdate({ error: '用户停止' })
+    destroyWebView()
+    return true
+  }
+
   try {
+    sendUpdate({ step: 0 })
     prepareHiddenBrowserViewport(1000, 650)
     await openBrowserUrl(resolveStartUrl(goal), true)
     sendUpdate()
 
     for (let i = 1; i <= MAX_STEPS; i++) {
-      if (shouldStop()) {
-        state = 'stopped'
-        sendUpdate()
-        destroyWebView()
+      if (cancelIfNeeded()) {
         return { success: false, steps, error: '用户停止' }
       }
 
-      state = 'looking'
+      state = 'observing'
       const browserState = await captureBrowserState()
       latestScreenshot = browserState.screenshot
       latestScreenshotMime = browserState.screenshotMime
       latestUrl = browserState.url
       latestTitle = browserState.title
-      const elementCandidates = selectElementCandidates(browserState.elements, goal)
+      const elementCandidates = selectElementCandidates(
+        browserState.elements,
+        goal,
+        16,
+        browserState.url,
+        browserState.title
+      )
       sendUpdate({
         step: i,
         domElementCount: browserState.elements.length,
         domCandidates: toDomDebugCandidates(elementCandidates, browserState)
       })
 
-      if (initialSearchQuery && isSearchResultsPage(browserState.url, browserState.title)) {
+      if (
+        initialSearchQuery &&
+        isSearchResultsPage(browserState.url, browserState.title) &&
+        isPureSearchGoal(goal)
+      ) {
         const step: WebAssistantStep = {
           id: i,
           thought: `已经帮你搜索“${initialSearchQuery}”，并打开了搜索结果页。`,
@@ -136,11 +166,20 @@ export async function runWebAssistant(
         return { success: true, answer, steps }
       }
 
+      if (cancelIfNeeded()) {
+        return { success: false, steps, error: '用户停止' }
+      }
+
+      state = 'thinking'
+      sendUpdate({ step: i })
       const result = await visionJson<VisionActionResult>({
         prompt: buildPrompt(goal, i, browserState, steps, elementCandidates),
         screenshotBase64: browserState.screenshot,
         screenshotMime: browserState.screenshotMime
       })
+      if (cancelIfNeeded()) {
+        return { success: false, steps, error: '用户停止' }
+      }
 
       const action = normalizeAction(result.action)
       const thought = result.thought || '我在看网页，准备下一步操作。'
@@ -155,6 +194,9 @@ export async function runWebAssistant(
       state = 'acting'
       sendUpdate({ step: i, thought, action })
       await sleep(450)
+      if (cancelIfNeeded()) {
+        return { success: false, steps, error: '用户停止' }
+      }
 
       if (action.type === 'done') {
         step.status = 'done'
@@ -167,18 +209,19 @@ export async function runWebAssistant(
 
       await performBrowserAction(action, browserState.elements)
       step.status = 'done'
+      state = 'settling'
       sendUpdate({ step: i })
       await sleep(1000)
     }
 
-    state = 'error'
+    state = 'timed_out'
     const error = '操作步数太多，已自动停止。你可以把任务说得更具体一点再试。'
     sendUpdate({ error })
     destroyWebView()
     return { success: false, steps, error }
-  } catch (error: any) {
+  } catch (error) {
     state = 'error'
-    const message = error.message || '网页小助手执行失败'
+    const message = getErrorMessage(error, '网页小助手执行失败')
     if (steps.length > 0) steps[steps.length - 1].status = 'error'
     sendUpdate({ error: message })
     destroyWebView()
@@ -186,12 +229,28 @@ export async function runWebAssistant(
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getErrorMessage(error: unknown, fallback = '未知错误'): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
+
 function buildPrompt(
   goal: string,
   step: number,
   browserState: BrowserState,
   steps: WebAssistantStep[],
-  elementCandidates: ElementCandidate[] = selectElementCandidates(browserState.elements, goal)
+  elementCandidates: ElementCandidate[] = selectElementCandidates(
+    browserState.elements,
+    goal,
+    16,
+    browserState.url,
+    browserState.title
+  )
 ): string {
   const history = steps
     .slice(-6)
@@ -232,6 +291,14 @@ ${elementHints || '没有可用候选元素，请根据截图用 x/y 坐标。'}
   "action": { "type": "click", "elementId": "e1" }
 }
 {
+  "thought": "打开搜索结果里的学习网页",
+  "action": { "type": "open_link", "elementId": "e3" }
+}
+{
+  "thought": "直接打开候选链接",
+  "action": { "type": "open_link", "url": "https://example.com" }
+}
+{
   "thought": "输入关键词",
   "action": { "type": "type", "text": "三年级分数加法练习题" }
 }
@@ -264,7 +331,7 @@ ${elementHints || '没有可用候选元素，请根据截图用 x/y 坐标。'}
 1. 一次只做一个动作。
 2. 如果候选元素里有合适的输入框/按钮/链接，优先返回 elementId；如果候选不合适，再用 x/y。
 3. 搜索时：先点击或 type 到搜索框，再 key Enter；不要直接跳过输入过程。
-4. 如果当前已经是搜索结果页，且用户只是要求搜索，返回 done；如果用户要求找合适网页，再点开最像“适合学生学习”的结果。
+4. 如果当前已经是搜索结果页，且用户只是要求搜索，返回 done；如果用户要求找合适网页/资料/练习题/方法/小实验，必须用 open_link 或 click 点进最像“适合学生学习”的真实结果页，不要停在搜索结果页。
 5. 如果截图里已经完成用户目标，返回 done。
 6. 不确定时先 wait 或 scroll，不要乱点危险按钮。
 7. 内容必须适合学生学习。`
@@ -273,19 +340,42 @@ ${elementHints || '没有可用候选元素，请根据截图用 x/y 坐标。'}
 function selectElementCandidates(
   elements: InteractiveElement[],
   goal: string,
-  limit = 12
+  limit = 16,
+  pageUrl = '',
+  pageTitle = ''
 ): ElementCandidate[] {
   const goalText = goal.toLowerCase()
   const wantsSearch = /搜索|搜一下|查找|查一下|检索|找.*(网页|资料|练习题|方法|小实验)/.test(goal)
   const wantsLogin = /登录|登陆|log ?in|sign ?in/.test(goalText)
   const wantsInput = wantsSearch || /输入|填写|填入|搜索框|文本框/.test(goal)
   const wantsOpen = /打开|进入|点开|点击|查看/.test(goal)
+  const wantsResultClick = shouldContinueIntoResult(goal)
+  const onSearchResults = isSearchResultsPage(pageUrl, pageTitle)
 
   return elements
-    .filter((element) => element.visible && !element.disabled && (element.clickable || element.editable))
-    .map((element) => ({ element, score: scoreElement(element, { goalText, wantsSearch, wantsLogin, wantsInput, wantsOpen }) }))
+    .filter(
+      (element) => element.visible && !element.disabled && (element.clickable || element.editable)
+    )
+    .map((element) => ({
+      element,
+      score: scoreElement(element, {
+        goalText,
+        wantsSearch,
+        wantsLogin,
+        wantsInput,
+        wantsOpen,
+        wantsResultClick,
+        onSearchResults,
+        pageUrl
+      })
+    }))
     .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.element.rect.y - b.element.rect.y || a.element.rect.x - b.element.rect.x)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.element.rect.y - b.element.rect.y ||
+        a.element.rect.x - b.element.rect.x
+    )
     .slice(0, limit)
 }
 
@@ -297,6 +387,9 @@ function scoreElement(
     wantsLogin: boolean
     wantsInput: boolean
     wantsOpen: boolean
+    wantsResultClick: boolean
+    onSearchResults: boolean
+    pageUrl: string
   }
 ): number {
   const haystack = [
@@ -327,6 +420,15 @@ function scoreElement(
   if (intent.wantsInput && element.editable) score += 18
   if (intent.wantsOpen && ['button', 'link'].includes(element.role)) score += 10
   if (intent.wantsLogin && /登录|登陆|log ?in|sign ?in/.test(haystack)) score += 45
+  if (intent.onSearchResults && intent.wantsResultClick) {
+    if (element.editable) score -= 35
+    if (
+      element.role === 'link' &&
+      isUsefulExternalLink(element.href, intent.pageUrl, element.text)
+    ) {
+      score += 55
+    }
+  }
 
   for (const token of extractGoalTokens(intent.goalText)) {
     if (token.length >= 2 && haystack.includes(token)) score += 8
@@ -354,9 +456,11 @@ function formatElementHints(candidates: ElementCandidate[], state: BrowserState)
       ]
         .filter(Boolean)
         .join(',')
+      const href = element.href ? ` href="${element.href.slice(0, 160)}"` : ''
+      const domain = element.href ? ` domain=${getUrlDomain(element.href) || 'unknown'}` : ''
       return `${element.id}: ${element.role}/${element.tag} label="${label || '无'}" center=(${cx},${cy}) size=${Math.round(
         element.rect.width
-      )}x${Math.round(element.rect.height)} score=${Math.round(score)} ${flags}`
+      )}x${Math.round(element.rect.height)} score=${Math.round(score)} ${flags}${domain}${href}`
     })
     .join('\n')
 }
@@ -387,7 +491,9 @@ function toDomDebugCandidates(
         element.editable ? 'editable' : '',
         element.clickable ? 'clickable' : '',
         element.disabled ? 'disabled' : ''
-      ].filter(Boolean)
+      ].filter(Boolean),
+      href: element.href || undefined,
+      domain: getUrlDomain(element.href) || undefined
     }
   })
 }
@@ -411,9 +517,9 @@ function extractGoalTokens(goalText: string): string[] {
     .slice(0, 12)
 }
 
-function normalizeAction(action: any): BrowserAction {
-  if (!action || typeof action !== 'object') {
-    throw new Error('模型没有给出可执行动作')
+function normalizeAction(action: unknown): BrowserAction {
+  if (!isRecord(action)) {
+    return { type: 'wait', ms: 900 }
   }
 
   const type = String(action.type || '').toLowerCase()
@@ -450,10 +556,21 @@ function normalizeAction(action: any): BrowserAction {
     case 'open':
     case 'open_url':
       return { type: 'navigate', url: String(action.url || action.href || '') }
+    case 'open_link':
+    case 'link':
+      return {
+        type: 'open_link',
+        elementId,
+        url: action.url ? String(action.url) : undefined,
+        href: action.href ? String(action.href) : undefined,
+        x: action.x === undefined ? undefined : toNumber(action.x, 500),
+        y: action.y === undefined ? undefined : toNumber(action.y, 500)
+      }
     case 'done':
       return { type: 'done', answer: String(action.answer || '完成了') }
     default:
-      throw new Error(`模型返回了未知动作：${type || '空'}`)
+      console.warn(`[WebAssistant] 模型返回了未知动作：${type || '空'}，改为重新观察`)
+      return { type: 'wait', ms: 900 }
   }
 }
 
@@ -463,6 +580,10 @@ function describeAction(action: BrowserAction): string {
       return action.elementId
         ? `点击元素 ${action.elementId}`
         : `点击 (${action.x ?? 500}, ${action.y ?? 500})`
+    case 'open_link':
+      return action.elementId
+        ? `打开链接 ${action.elementId}`
+        : `打开链接 ${action.url || action.href || ''}`
     case 'type':
       return `${action.elementId ? `在 ${action.elementId} ` : ''}输入“${action.text.slice(0, 30)}${
         action.text.length > 30 ? '…' : ''
@@ -493,7 +614,7 @@ function resolveStartUrl(goal: string): string {
 
   const searchQuery = extractSearchQuery(goal)
   if (searchQuery) {
-    return DEFAULT_START_URL
+    return `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}`
   }
 
   return DEFAULT_START_URL
@@ -517,6 +638,39 @@ function extractSearchQuery(goal: string): string | null {
 
 function isSearchResultsPage(url: string, title: string): boolean {
   return /[?&](q|wd|query)=/i.test(url) || /\/search\b/i.test(url) || /搜索结果/i.test(title)
+}
+
+function isPureSearchGoal(goal: string): boolean {
+  const normalized = goal.replace(/\s+/g, '')
+  if (shouldContinueIntoResult(normalized)) return false
+  return /^(帮我|请)?(搜索|搜一下|查找|查一下|检索)/.test(normalized)
+}
+
+function shouldContinueIntoResult(goal: string): boolean {
+  return /找到|找一个|合适|适合|点开|点击|进入|打开|查看|网页|资料|练习题|方法|小实验|文章|页面/.test(
+    goal
+  )
+}
+
+function isUsefulExternalLink(href: string, pageUrl: string, text = ''): boolean {
+  if (!href || !/^https?:\/\//i.test(href)) return false
+  const domain = getUrlDomain(href)
+  const pageDomain = getUrlDomain(pageUrl)
+  if (/登录|广告|图片|视频|更多|地图|新闻|翻译|缓存/.test(text)) return false
+  if (/bing\.com/i.test(domain)) {
+    return /\/ck\/a/i.test(href) && text.trim().length >= 5
+  }
+  if (!domain || domain === pageDomain) return false
+  if (/microsoft\.com|go\.microsoft\.com|google\./i.test(domain)) return false
+  return true
+}
+
+function getUrlDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
 }
 
 function cleanupSearchQuery(query: string): string | null {

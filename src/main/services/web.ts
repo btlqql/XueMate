@@ -7,8 +7,11 @@ interface PageResult {
   links: { text: string; href: string }[]
 }
 
+type UnknownRecord = Record<string, unknown>
+
 export type BrowserAction =
   | { type: 'click'; x?: number; y?: number; elementId?: string }
+  | { type: 'open_link'; url?: string; href?: string; elementId?: string; x?: number; y?: number }
   | { type: 'type'; text: string; elementId?: string; x?: number; y?: number }
   | { type: 'scroll'; x?: number; y?: number; dy: number; elementId?: string }
   | { type: 'key'; key: string }
@@ -76,6 +79,16 @@ const PACE = {
   navigateSettle: 1200
 }
 
+function isRecord(value: unknown): value is UnknownRecord {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getErrorMessage(error: unknown, fallback = '未知错误'): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
+
 // 设置宿主窗口（在 main/index.ts 里调用）
 export function setHostWindow(win: BrowserWindow): void {
   hostWindow = win
@@ -137,6 +150,7 @@ export function setLiveBrowserBounds(bounds: LiveBrowserBounds | null): void {
   if (!bounds || bounds.width < 120 || bounds.height < 100) {
     liveBounds = null
     detachLiveView()
+    liveMode = false
     return
   }
 
@@ -191,15 +205,15 @@ export async function openBrowserUrl(url: string, throwOnFailure = false): Promi
   const webContents = getActiveWebContents()
   const normalized = normalizeUrl(url)
 
-  let lastError: any = null
+  let lastError: unknown = null
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       await webContents.loadURL(normalized)
       await waitForPageSettle(webContents, 800)
       return
-    } catch (err: any) {
+    } catch (err) {
       lastError = err
-      console.error(`[Web] openBrowserUrl 失败(${attempt}/2):`, err.message)
+      console.error(`[Web] openBrowserUrl 失败(${attempt}/2):`, getErrorMessage(err))
       if (!isTransientLoadError(err) || attempt === 2) break
       await sleep(900)
     }
@@ -220,8 +234,8 @@ export async function fetchPage(url: string): Promise<PageResult> {
   try {
     await win.loadURL(normalizedUrl)
     await waitForPageSettle(win.webContents, 800)
-  } catch (err: any) {
-    console.error('[Web] loadURL 失败:', err.message)
+  } catch (err) {
+    console.error('[Web] loadURL 失败:', getErrorMessage(err))
   }
 
   await sleep(600)
@@ -231,8 +245,8 @@ export async function fetchPage(url: string): Promise<PageResult> {
     // 每次提取成功后清理缓存，防止内存累积；不要在 executeJavaScript 前清。
     clearSessionCacheSoon(win.webContents)
     return data
-  } catch (err: any) {
-    console.error('[Web] renderer 提取网页失败，改用 net.fetch 兜底:', err.message)
+  } catch (err) {
+    console.error('[Web] renderer 提取网页失败，改用 net.fetch 兜底:', getErrorMessage(err))
     clearSessionCacheSoon(win.webContents)
     return fetchPageWithNet(normalizedUrl)
   }
@@ -312,11 +326,18 @@ async function extractPageFromRenderer(webContents: Electron.WebContents): Promi
     text: String(data.text || ''),
     links: Array.isArray(data.links)
       ? data.links
-          .map((link: any) => ({
-            text: String(link?.text || '').trim().slice(0, 100),
-            href: String(link?.href || '').trim()
-          }))
-          .filter((link: { text: string; href: string }) => link.text && /^https?:\/\//i.test(link.href))
+          .map((link: unknown) => {
+            const item = isRecord(link) ? link : {}
+            return {
+              text: String(item.text || '')
+                .trim()
+                .slice(0, 100),
+              href: String(item.href || '').trim()
+            }
+          })
+          .filter(
+            (link: { text: string; href: string }) => link.text && /^https?:\/\//i.test(link.href)
+          )
           .slice(0, 30)
       : []
   }
@@ -437,10 +458,14 @@ export async function captureBrowserState(): Promise<BrowserState> {
   const webContents = getActiveWebContents()
   await waitForPageSettle(webContents, 150)
   const [image, elements] = await Promise.all([
-    webContents.capturePage(),
+    capturePageWithRetry(webContents),
     extractInteractiveElements(webContents)
   ])
-  const normalizedImage = image.resize({ width: viewportWidth, height: viewportHeight, quality: 'good' })
+  const normalizedImage = image.resize({
+    width: viewportWidth,
+    height: viewportHeight,
+    quality: 'good'
+  })
   const size = normalizedImage.getSize()
   return {
     screenshot: normalizedImage.toJPEG(72).toString('base64'),
@@ -453,6 +478,34 @@ export async function captureBrowserState(): Promise<BrowserState> {
   }
 }
 
+async function capturePageWithRetry(
+  webContents: Electron.WebContents
+): Promise<Electron.NativeImage> {
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      if (webContents.isDestroyed()) {
+        throw new Error('内置浏览器窗口已关闭')
+      }
+      const image = await webContents.capturePage()
+      if (!image.isEmpty()) return image
+      throw new Error('截图为空')
+    } catch (error) {
+      lastError = error
+      if (attempt < 2) {
+        await sleep(260)
+        await waitForPageSettle(webContents, 120)
+      }
+    }
+  }
+
+  throw new Error(
+    `Electron 内置浏览器截图失败，可能是实时网页区域刚切换或窗口已关闭：${getErrorMessage(
+      lastError
+    )}`
+  )
+}
+
 export async function performBrowserAction(
   action: BrowserAction,
   elements: InteractiveElement[] = []
@@ -461,6 +514,10 @@ export async function performBrowserAction(
 
   switch (action.type) {
     case 'click': {
+      const targetElement = action.elementId
+        ? elements.find((item) => item.id === action.elementId)
+        : null
+      const beforeUrl = webContents.getURL()
       const { x, y } = resolveActionPoint(action, elements)
       await sleep(PACE.beforeAction)
       webContents.sendInputEvent({ type: 'mouseMove', x, y })
@@ -469,6 +526,28 @@ export async function performBrowserAction(
       await sleep(PACE.clickDown)
       webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
       await waitForPageSettle(webContents, PACE.afterAction)
+      await openHrefFallbackIfNeeded(webContents, beforeUrl, targetElement?.href)
+      return
+    }
+    case 'open_link': {
+      const targetElement = action.elementId
+        ? elements.find((item) => item.id === action.elementId)
+        : null
+      const targetUrl = action.url || action.href || targetElement?.href
+      if (targetUrl && isWebUrl(targetUrl)) {
+        await openBrowserUrl(targetUrl, true)
+        await sleep(PACE.navigateSettle)
+        return
+      }
+      if (targetElement) {
+        const beforeUrl = webContents.getURL()
+        const { x, y } = resolveActionPoint({ elementId: targetElement.id }, elements)
+        await clickPoint(webContents, x, y)
+        await openHrefFallbackIfNeeded(webContents, beforeUrl, targetElement.href)
+        return
+      }
+      const { x, y } = resolveActionPoint(action, elements)
+      await clickPoint(webContents, x, y)
       return
     }
     case 'type': {
@@ -569,6 +648,17 @@ export function finishBrowserRun(): void {
   destroyWebView()
 }
 
+export function stopActiveBrowserLoading(): void {
+  try {
+    const webContents = getActiveWebContents()
+    if (!webContents.isDestroyed()) {
+      webContents.stop()
+    }
+  } catch {
+    /* 当前没有可停止的内置浏览器 */
+  }
+}
+
 function normalizeUrl(url: string): string {
   const trimmed = url.trim()
   if (/^https?:\/\//i.test(trimmed)) return trimmed
@@ -652,13 +742,40 @@ async function openPopupUrlInSameView(
 
   try {
     await webContents.loadURL(url)
-  } catch (error: any) {
-    console.error('[Web] popup 在当前浏览器打开失败:', error.message)
+  } catch (error) {
+    console.error('[Web] popup 在当前浏览器打开失败:', getErrorMessage(error))
+  }
+}
+
+async function openHrefFallbackIfNeeded(
+  webContents: Electron.WebContents,
+  beforeUrl: string,
+  href?: string
+): Promise<void> {
+  if (!href || !isWebUrl(href) || webContents.isDestroyed()) return
+
+  const afterUrl = webContents.getURL()
+  if (stripUrlHash(afterUrl) !== stripUrlHash(beforeUrl)) return
+  try {
+    await webContents.loadURL(href)
+    await waitForPageSettle(webContents, PACE.navigateSettle)
+  } catch (error) {
+    console.warn('[Web] 点击链接无变化，href fallback 失败:', getErrorMessage(error))
   }
 }
 
 function isWebUrl(url: string): boolean {
   return /^https?:\/\//i.test(url)
+}
+
+function stripUrlHash(url: string): string {
+  try {
+    const parsed = new URL(url)
+    parsed.hash = ''
+    return parsed.href
+  } catch {
+    return url
+  }
 }
 
 async function extractInteractiveElements(
@@ -823,8 +940,8 @@ async function extractInteractiveElements(
     )
 
     return Array.isArray(raw) ? raw : []
-  } catch (error: any) {
-    console.warn('[Web] DOM 元素抽取失败:', error.message)
+  } catch (error) {
+    console.warn('[Web] DOM 元素抽取失败:', getErrorMessage(error))
     return []
   }
 }
@@ -870,10 +987,11 @@ async function scrollSlowly(
 }
 
 function getActiveWebContents(): Electron.WebContents {
-  if (liveMode) {
+  if (liveMode && liveBounds) {
     attachAndLayoutLiveView()
     return getOrCreateBrowserView().webContents
   }
+  liveMode = false
   return getOrCreateBrowserWindow().webContents
 }
 
@@ -931,14 +1049,14 @@ function isSameBounds(a: LiveBrowserBounds, b: LiveBrowserBounds): boolean {
   )
 }
 
-function isTransientLoadError(error: any): boolean {
+function isTransientLoadError(error: unknown): boolean {
   return /ERR_TIMED_OUT|ERR_NETWORK_CHANGED|ERR_CONNECTION|ERR_INTERNET|ERR_PROXY/i.test(
-    String(error?.message || '')
+    getErrorMessage(error, '')
   )
 }
 
-function formatLoadError(error: any, url: string): string {
-  const message = String(error?.message || '')
+function formatLoadError(error: unknown, url: string): string {
+  const message = getErrorMessage(error, '')
   if (/ERR_TIMED_OUT/i.test(message)) {
     return `网页打开超时：${url}`
   }

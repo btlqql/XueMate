@@ -97,7 +97,7 @@ const quickSearchAPI = {
 
 const webAssistantAPI = {
   start: (goal: string) => ipcRenderer.invoke('webAssistant:start', goal),
-  stop: () => ipcRenderer.invoke('webAssistant:stop'),
+  stop: (runId?: string) => ipcRenderer.invoke('webAssistant:stop', runId),
   setLiveBounds: (bounds: { x: number; y: number; width: number; height: number } | null) =>
     ipcRenderer.invoke('webAssistant:setLiveBounds', bounds),
   onUpdate: (callback: (data: WebAssistantUpdate) => void) => {

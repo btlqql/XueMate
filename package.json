@@ -21,7 +21,9 @@
     "bench:rag": "node scripts/rag-benchmark.mjs",
     "bench:memory": "node scripts/memory-benchmark.mjs",
     "mcp:build": "cargo build --release --manifest-path mcp-gateway-rs/Cargo.toml",
-    "bench:mcp": "node scripts/bench-mcp-layer.mjs"
+    "bench:mcp": "node scripts/bench-mcp-layer.mjs",
+    "peeredge:build": "cargo build --release --manifest-path peer-edge-rs/Cargo.toml",
+    "peeredge:dev": "cargo run --manifest-path peer-edge-rs/Cargo.toml"
   },
   "dependencies": {
     "@electron-toolkit/preload": "3.0.2",

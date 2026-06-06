@@ -105,7 +105,7 @@ const deleteTask = async (task) => {
 <template>
   <div class="fade-in">
     <div class="page-header">
-      <h1 class="page-title">任务解析</h1>
+      <h1 class="page-title">整理作业</h1>
       <p class="page-desc">把通知或作业要求贴进来，整理成清楚的待办事项</p>
     </div>
 
@@ -265,7 +265,9 @@ const deleteTask = async (task) => {
   cursor: pointer;
   padding: 5px;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
 }
 
 .task-delete:hover {
