@@ -1,9 +1,15 @@
 <script setup>
-import { ref, computed, markRaw } from 'vue'
+import { ref, computed, markRaw, watch } from 'vue'
 import TaskView from './TaskView.vue'
 import TutorView from './TutorView.vue'
 import ReviewView from './ReviewView.vue'
 
+const props = defineProps({
+  currentRoute: { type: Object, default: null },
+  routePayload: { type: Object, default: null }
+})
+
+const toolIds = ['task', 'tutor', 'review']
 const currentTool = ref('task')
 
 const tools = [
@@ -29,6 +35,28 @@ const tools = [
 
 const activeComponent = computed(
   () => tools.find((tool) => tool.id === currentTool.value)?.component
+)
+
+function normalizeToolId(value) {
+  if (typeof value !== 'string') return ''
+  const id = value.trim().toLowerCase()
+  return toolIds.includes(id) ? id : ''
+}
+
+function resolveRouteTool() {
+  return (
+    normalizeToolId(props.currentRoute?.tool) ||
+    normalizeToolId(props.routePayload?.tool) ||
+    normalizeToolId(props.currentRoute?.payload?.tool)
+  )
+}
+
+watch(
+  () => resolveRouteTool(),
+  (tool) => {
+    if (tool) currentTool.value = tool
+  },
+  { immediate: true }
 )
 </script>
 
