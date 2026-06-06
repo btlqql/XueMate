@@ -1,5 +1,7 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   searchInput: { type: String, default: '' },
   searching: Boolean,
   searchError: { type: String, default: '' },
@@ -14,6 +16,11 @@ defineProps({
 })
 
 const emit = defineEmits(['update:searchInput', 'search', 'sample'])
+
+const resultCitations = computed(() => buildCitationItems(props.searchResult))
+const backgroundCitations = computed(() => buildCitationItems(props.backgroundResult))
+const resultSourceCount = computed(() => sourceCount(props.searchResult))
+const backgroundSourceCount = computed(() => sourceCount(props.backgroundResult))
 
 function quickSearchStatusLabel(status) {
   if (status === 'done') return '完成'
@@ -34,6 +41,93 @@ function formatHistoryTime(timestamp) {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+function sourceCount(result) {
+  return Array.isArray(result?.sources) ? result.sources.length : 0
+}
+
+function toArray(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function truncateText(value, maxLength = 150) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
+}
+
+function hostFromUrl(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+function formatPercent(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return ''
+  const normalized = number <= 1 ? number * 100 : number
+  return `${Math.round(Math.max(0, Math.min(100, normalized)))}%`
+}
+
+function formatPosition(start, end) {
+  const hasStart = start !== undefined && start !== null && start !== ''
+  const hasEnd = end !== undefined && end !== null && end !== ''
+  if (!hasStart && !hasEnd) return ''
+  return `${hasStart ? start : '?'}-${hasEnd ? end : '?'}`
+}
+
+function buildCitationItems(result) {
+  if (!result || typeof result !== 'object') return []
+
+  const sourceItems = toArray(result.sources).map((source, index) => ({
+    id: `source-${index}`,
+    label: `网页 ${index + 1}`,
+    title: source.title || source.fileName || '参考来源',
+    url: source.url || '',
+    host: hostFromUrl(source.url),
+    snippet: truncateText(source.snippet || source.text || source.content, 190),
+    position: formatPosition(source.startPos, source.endPos),
+    score: formatPercent(source.scores?.overall ?? source.score),
+    level: source.scores?.level || source.level || '',
+    reason: source.scores?.reason || ''
+  }))
+
+  const retrieveItems = toArray(result.results).map((item, index) => {
+    const chunk = item.chunk || item
+    return {
+      id: `rag-${index}`,
+      label: `资料 ${index + 1}`,
+      title: chunk.fileName || item.fileName || '知识库资料',
+      url: '',
+      host: chunk.collectionId || item.collectionId || '',
+      snippet: truncateText(chunk.content || item.snippet || item.content, 210),
+      position: formatPosition(chunk.startPos ?? item.startPos, chunk.endPos ?? item.endPos),
+      score: formatPercent(item.score),
+      level: item.rankReason?.join('、') || '',
+      reason: item.rankReason?.join('、') || ''
+    }
+  })
+
+  const referenceItems = toArray(result.citations || result.references || result.evidenceRefs).map(
+    (ref, index) => ({
+      id: `ref-${index}`,
+      label: `引用 ${index + 1}`,
+      title: ref.fileName || ref.title || ref.documentName || '引用来源',
+      url: ref.url || '',
+      host: hostFromUrl(ref.url) || ref.collectionName || '',
+      snippet: truncateText(ref.snippet || ref.text || ref.content, 190),
+      position: formatPosition(ref.startPos, ref.endPos),
+      score: formatPercent(ref.score || ref.overall),
+      level: ref.level || '',
+      reason: ref.reason || ''
+    })
+  )
+
+  return [...retrieveItems, ...referenceItems, ...sourceItems].filter(
+    (item) => item.title || item.snippet || item.url
+  )
 }
 </script>
 
@@ -117,8 +211,45 @@ function formatHistoryTime(timestamp) {
       <div class="resource-meta" v-if="searchResult.elapsedMs || searchResult.cacheHit">
         <span v-if="searchResult.elapsedMs">{{ searchResult.elapsedMs }}ms</span>
         <span v-if="searchResult.cacheHit">缓存命中</span>
+        <span v-if="resultSourceCount">{{ resultSourceCount }} 个来源</span>
       </div>
-      <div class="summary-box">{{ searchResult.summary }}</div>
+
+      <div class="answer-card">
+        <div class="answer-label">整理结果</div>
+        <div class="summary-box">{{ searchResult.summary }}</div>
+      </div>
+
+      <div class="citation-panel" v-if="resultCitations.length">
+        <div class="citation-head">
+          <div>
+            <h3>引用定位</h3>
+            <p>答案里的资料可以回到原文片段查看。</p>
+          </div>
+          <span>{{ resultCitations.length }} 条</span>
+        </div>
+        <div class="citation-grid">
+          <a
+            v-for="item in resultCitations"
+            :key="item.id"
+            class="citation-card"
+            :class="{ 'is-document': !item.url }"
+            :href="item.url || undefined"
+            :target="item.url ? '_blank' : undefined"
+          >
+            <div class="citation-top">
+              <span class="citation-index">{{ item.label }}</span>
+              <span class="citation-score" v-if="item.score">{{ item.score }}</span>
+            </div>
+            <strong>{{ item.title }}</strong>
+            <small v-if="item.host">{{ item.host }}</small>
+            <p v-if="item.snippet">{{ item.snippet }}</p>
+            <div class="citation-foot" v-if="item.position || item.level">
+              <span v-if="item.position">位置 {{ item.position }}</span>
+              <span v-if="item.level">{{ item.level }}</span>
+            </div>
+          </a>
+        </div>
+      </div>
 
       <div class="stage-list" v-if="searchResult.stages?.length">
         <div
@@ -132,7 +263,7 @@ function formatHistoryTime(timestamp) {
         </div>
       </div>
 
-      <h3 class="source-title">参考网页</h3>
+      <h3 class="source-title" v-if="searchResult.sources?.length">参考网页</h3>
       <div class="source-list">
         <a
           v-for="source in searchResult.sources"
@@ -144,6 +275,7 @@ function formatHistoryTime(timestamp) {
           <div class="source-main">
             <strong>{{ source.title }}</strong>
             <small>{{ source.url }}</small>
+            <p v-if="source.text">{{ truncateText(source.text, 120) }}</p>
           </div>
           <div class="score-pill" v-if="source.scores">
             {{ source.scores.level || source.level }} · {{ source.scores.overall }}
@@ -172,8 +304,40 @@ function formatHistoryTime(timestamp) {
           <div class="resource-meta" v-if="backgroundResult.elapsedMs || backgroundResult.cacheHit">
             <span v-if="backgroundResult.elapsedMs">{{ backgroundResult.elapsedMs }}ms</span>
             <span v-if="backgroundResult.cacheHit">缓存命中</span>
+            <span v-if="backgroundSourceCount">{{ backgroundSourceCount }} 个来源</span>
           </div>
           <div class="summary-box small">{{ backgroundResult.summary }}</div>
+
+          <div class="citation-panel compact" v-if="backgroundCitations.length">
+            <div class="citation-head">
+              <div>
+                <h3>后台补充来源</h3>
+                <p>更适合继续追溯的资料片段。</p>
+              </div>
+              <span>{{ backgroundCitations.length }} 条</span>
+            </div>
+            <div class="citation-grid">
+              <a
+                v-for="item in backgroundCitations"
+                :key="item.id"
+                class="citation-card"
+                :class="{ 'is-document': !item.url }"
+                :href="item.url || undefined"
+                :target="item.url ? '_blank' : undefined"
+              >
+                <div class="citation-top">
+                  <span class="citation-index">{{ item.label }}</span>
+                  <span class="citation-score" v-if="item.score">{{ item.score }}</span>
+                </div>
+                <strong>{{ item.title }}</strong>
+                <p v-if="item.snippet">{{ item.snippet }}</p>
+                <div class="citation-foot" v-if="item.position || item.level">
+                  <span v-if="item.position">位置 {{ item.position }}</span>
+                  <span v-if="item.level">{{ item.level }}</span>
+                </div>
+              </a>
+            </div>
+          </div>
 
           <div class="stage-list" v-if="backgroundResult.stages?.length">
             <div
