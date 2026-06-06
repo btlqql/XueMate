@@ -74,7 +74,7 @@ async function locateDocument(source) {
   <div class="fade-in">
     <div class="page-header">
       <h1 class="page-title">我的资料</h1>
-      <p class="page-desc">把课件、笔记、作业放进来，学伴回答时会先看这些资料</p>
+      <p class="page-desc">课件、笔记、作业要求都放在这里，后面查找起来更省事</p>
     </div>
 
     <!-- 资料夹 -->
@@ -82,7 +82,7 @@ async function locateDocument(source) {
       <div class="collection-head">
         <div>
           <h2 class="section-title">资料夹</h2>
-          <p class="collection-desc">按科目分开放，比如语文、数学、英语，这样回答不会串科。</p>
+          <p class="collection-desc">按科目分开放，比如语文、数学、英语，找资料时不容易混在一起。</p>
         </div>
         <form class="create-form" @submit.prevent="createCollection">
           <input
@@ -246,15 +246,15 @@ async function locateDocument(source) {
         <div class="step">
           <span class="step-num">3</span>
           <div>
-            <strong>自动读资料</strong>
-            <p>学伴会把长资料拆成小段，聊天时先找最相关的内容。</p>
+            <strong>整理资料</strong>
+              <p>长资料会按段落整理好，后面提问时更容易找到原文。</p>
           </div>
         </div>
         <div class="step">
           <span class="step-num">4</span>
           <div>
             <strong>聊天时选择资料</strong>
-            <p>聊天页可以选择“全部资料”、某个资料夹，或者“不用资料”。</p>
+              <p>聊天页可以按资料夹提问，也可以临时不用资料。</p>
           </div>
         </div>
       </div>

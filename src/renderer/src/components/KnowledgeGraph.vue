@@ -108,13 +108,13 @@ function changeScope(scopeId) {
   <div class="graph-card">
     <div class="graph-header">
       <div>
-        <div class="eyebrow">学习图谱 · Sigma.js</div>
+        <div class="eyebrow">资料关系</div>
         <h2 class="section-title">学习网络 · {{ scopeName }}</h2>
-        <p class="graph-desc">把资料、知识点、学习画像和复习任务连起来；可以进入单个图谱，也可以回到全部图谱。</p>
+        <p class="graph-desc">看看资料、知识点和复习任务之间是怎么连起来的。</p>
         <p class="graph-status">{{ graphStatusText }}</p>
       </div>
       <button class="btn btn-secondary" :disabled="loading" @click="emit('refresh')">
-        {{ loading ? '生成中...' : '刷新图谱' }}
+        {{ loading ? '整理中...' : '刷新' }}
       </button>
     </div>
 
@@ -260,7 +260,7 @@ function changeScope(scopeId) {
             {{ locateButtonText }}
           </button>
           <div v-if="articleTarget" class="article-hint">
-            <strong>可定位资料</strong>
+            <strong>对应资料</strong>
             <p>{{ articleTarget.fileName }}</p>
             <span v-if="articleTarget.startPos !== undefined">
               片段位置：{{ articleTarget.startPos }} - {{ articleTarget.endPos }}
@@ -302,15 +302,15 @@ function changeScope(scopeId) {
         <template v-else>
           <div class="empty-panel-icon">✦</div>
           <h3>点击一个节点</h3>
-          <p class="node-desc">可以查看它来自哪份资料、关联哪些知识点，以及学生在哪些地方薄弱。</p>
+          <p class="node-desc">可以查看它来自哪份资料、和哪些知识点放在一起。</p>
         </template>
       </aside>
     </div>
 
     <div v-else-if="!loading" class="graph-empty">
       <div class="empty-planet">✦</div>
-      <h3>导入资料后会自动长出学习网络</h3>
-      <p>至少需要一份资料，系统会抽取知识点并和学习画像、复习队列连接。</p>
+      <h3>导入资料后，这里会出现关系图</h3>
+      <p>先放一份课件或笔记，再回到这里查看它和知识点的关系。</p>
     </div>
   </div>
 </template>

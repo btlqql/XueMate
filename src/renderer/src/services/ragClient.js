@@ -15,7 +15,7 @@ function withQuery(path, params = {}) {
 async function bridgeGet(path, params) {
   const response = await fetch(withQuery(path, params))
   if (!response.ok) {
-    return { success: false, error: `本地真实接口失败：${response.status}` }
+    return { success: false, error: `资料服务暂时不可用：${response.status}` }
   }
   return response.json()
 }
@@ -30,21 +30,21 @@ export const ragClient = {
     const api = ipcRag()
     return api
       ? api.createCollection(name, description)
-      : Promise.resolve({ success: false, error: '请在 Electron 软件窗口中新建资料夹' })
+      : Promise.resolve({ success: false, error: '请在完整软件窗口中新建资料夹。' })
   },
 
   importFile(filePath, collectionId) {
     const api = ipcRag()
     return api
       ? api.importFile(filePath, collectionId)
-      : Promise.resolve({ success: false, error: '请在 Electron 软件窗口中导入资料' })
+      : Promise.resolve({ success: false, error: '请在完整软件窗口中导入资料。' })
   },
 
   selectAndImport(collectionId) {
     const api = ipcRag()
     return api
       ? api.selectAndImport(collectionId)
-      : Promise.resolve({ success: false, error: '请在 Electron 软件窗口中导入资料' })
+      : Promise.resolve({ success: false, error: '请在完整软件窗口中导入资料。' })
   },
 
   documents(collectionId) {
@@ -56,7 +56,7 @@ export const ragClient = {
     const api = ipcRag()
     return api
       ? api.delete(docId)
-      : Promise.resolve({ success: false, error: '请在 Electron 软件窗口中删除资料' })
+      : Promise.resolve({ success: false, error: '请在完整软件窗口中删除资料。' })
   },
 
   stats(collectionId) {

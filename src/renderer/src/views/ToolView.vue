@@ -9,8 +9,8 @@ const currentTool = ref('task')
 const tools = [
   {
     id: 'task',
-    label: '任务解析',
-    desc: '提取作业要求和截止时间',
+    label: '作业清单',
+    desc: '整理要求、时间和提交格式',
     component: markRaw(TaskView)
   },
   {
@@ -22,7 +22,7 @@ const tools = [
   {
     id: 'review',
     label: '复习总结',
-    desc: '生成课程复习提纲',
+    desc: '梳理章节、重点和复习安排',
     component: markRaw(ReviewView)
   }
 ]

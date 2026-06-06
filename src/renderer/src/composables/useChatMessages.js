@@ -2,15 +2,15 @@ import { computed, nextTick, shallowRef, watch } from 'vue'
 import { marked } from 'marked'
 
 export const suggestions = [
-  '帮我复习数据结构',
+  '今天复习数据结构',
   '解释 Python 列表推导式',
-  '检查我的作业格式',
-  '制定今天的学习计划'
+  '看看作业格式有没有问题',
+  '排一下今天的学习安排'
 ]
 
 export const quickEntries = [
-  { view: 'knowledge', title: '放入课本资料', desc: '让学伴看你的课件和笔记', icon: '📚' },
-  { view: 'tools', title: '学习小工具', desc: '作业、刷题、复习都在这里', icon: '✏️' }
+  { view: 'knowledge', title: '整理课本资料', desc: '课件、笔记、作业要求放在这里', icon: '📚' },
+  { view: 'tools', title: '处理学习任务', desc: '作业、刷题、复习放在一处', icon: '✏️' }
 ]
 
 const ANIM_RE = /```animation\s*\n?([\s\S]*?)```/
@@ -107,7 +107,7 @@ export function useChatMessages(props, listRef) {
         try {
           parts.push({ type: 'anim', data: JSON.parse(openBlock[1].trim()) })
         } catch {
-          parts.push({ type: 'text', content: '动画数据还没生成完整，无法预览。' })
+          parts.push({ type: 'text', content: '动画内容还没整理完整，暂时看不了。' })
         }
       } else {
         parts.push({ type: 'text', content: remaining })

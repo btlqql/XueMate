@@ -37,7 +37,7 @@ const generateOutline = async () => {
   <div class="fade-in">
     <div class="page-header">
       <h1 class="page-title">复习总结</h1>
-      <p class="page-desc">生成复习提纲和重点清单，高效备考</p>
+      <p class="page-desc">把课程内容拆成章节、重点和接下来的复习安排</p>
     </div>
 
     <div class="card">
@@ -45,7 +45,7 @@ const generateOutline = async () => {
       <div class="input-bar">
         <input v-model="courseName" class="input" placeholder="输入课程名称，如：数据结构" />
         <button class="btn btn-primary" @click="generateOutline" :disabled="generating">
-          {{ generating ? '生成中...' : '生成提纲' }}
+          {{ generating ? '整理中...' : '整理提纲' }}
         </button>
       </div>
       <div class="error-msg" v-if="error">{{ error }}</div>
@@ -88,12 +88,12 @@ const generateOutline = async () => {
     </template>
 
     <div class="card" v-if="!outline">
-      <h2 class="section-title">功能说明</h2>
+      <h2 class="section-title">可以整理这些内容</h2>
       <div class="feature-grid">
-        <div class="feature"><strong>提纲生成</strong><p>输入课程名，整理章节知识点</p></div>
+        <div class="feature"><strong>章节提纲</strong><p>把课程拆成几块内容来看</p></div>
         <div class="feature"><strong>重点标记</strong><p>标注各章节考试频率</p></div>
-        <div class="feature"><strong>复习计划</strong><p>生成7天复习计划模板</p></div>
-        <div class="feature"><strong>学习建议</strong><p>针对性复习策略</p></div>
+        <div class="feature"><strong>复习安排</strong><p>按天排出大致复习节奏</p></div>
+        <div class="feature"><strong>查漏补缺</strong><p>把容易漏掉的地方单独列出来</p></div>
       </div>
     </div>
   </div>

@@ -53,8 +53,8 @@ export function useKnowledgeGraphRenderer(props) {
   const hasGraph = computed(() => (props.graphData?.nodes || []).length > 1)
 
   const graphStatusText = computed(() => {
-    if (props.loading) return '正在生成学习网络...'
-    if (props.error) return '生成失败，点刷新重试'
+    if (props.loading) return '正在整理学习网络...'
+    if (props.error) return '暂时没有整理好，点刷新再试'
     if (!props.graphData) return '等待资料数据'
     if (!hasGraph.value) return '资料太少，暂时没有形成网络'
     if (subgraphRootId.value) {
@@ -378,7 +378,7 @@ export function useKnowledgeGraphRenderer(props) {
       })
       lastRenderedSignature = signature
       graphCanvasReady.value = true
-      renderStage.value = '真实图谱已打开'
+      renderStage.value = '关系图已打开'
       requestAnimationFrame(() => {
         if (renderer && isContainerRenderable()) {
           fitGraph(false)

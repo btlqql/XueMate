@@ -43,8 +43,8 @@ const {
           <path d="M15 7h2" />
         </svg>
       </div>
-      <h2 class="welcome-title">你好，同学！</h2>
-      <p class="welcome-desc">我是你的学习小帮手，想先做什么？</p>
+      <h2 class="welcome-title">今天先看哪一块？</h2>
+      <p class="welcome-desc">可以问问题、整理资料，也可以先把作业要求放进来。</p>
       <div class="suggestions">
         <button v-for="s in suggestions" :key="s" class="suggestion-btn" @click="$emit('send', s)">
           {{ s }}
@@ -52,7 +52,7 @@ const {
       </div>
 
       <div class="quick-entry-wrap">
-        <div class="quick-entry-title">先从这里开始</div>
+        <div class="quick-entry-title">常用入口</div>
         <div class="quick-entries">
           <button
             v-for="entry in quickEntries"

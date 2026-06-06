@@ -102,11 +102,11 @@ export function useKnowledgeBase() {
       if (result.success) {
         graphData.value = result.data || null
       } else {
-        graphError.value = result.error || '生成学习网络失败'
+        graphError.value = result.error || '学习网络暂时没有整理好'
       }
     } catch (e) {
       console.error('[Knowledge] loadGraph 失败:', e)
-      graphError.value = '生成学习网络失败: ' + (e.message || '未知错误')
+      graphError.value = '学习网络暂时没有整理好: ' + (e.message || '未知错误')
     } finally {
       graphLoading.value = false
     }

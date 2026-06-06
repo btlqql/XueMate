@@ -269,16 +269,16 @@ function sleep(ms) {
 function toFriendlyError(message) {
   if (!message) return ''
   if (message.includes('VISION_API_KEY') || message.includes('GEMINI_API_KEY')) {
-    return '还没配置多模态模型密钥。需要在 .env 里配置 VISION_API_KEY。'
+    return '网页查看功能还没配置好，需要先补充 .env 里的相关配置。'
   }
   if (/503|UNAVAILABLE|high demand|太忙|temporar|busy|overload/i.test(message)) {
-    return '多模态模型现在太忙，学伴已经重试并换备用模型了，但还是失败。请稍后再点“开始操作网页”。'
+    return '网页查看暂时有点忙，稍后再点“开始查看”试一次。'
   }
   if (/429|quota|rate limit|额度|限流|exceeded/i.test(message)) {
-    return '多模态模型额度不足或被限流了。请稍后再试，或在 .env 里换一个 VISION_MODEL。'
+    return '网页查看次数暂时受限，稍后再试，或检查一下 .env 配置。'
   }
   if (/net::ERR_|ERR_TIMED_OUT|ERR_NETWORK_CHANGED|网页打开超时|网络连接/i.test(message)) {
-    return '网页暂时打不开，可能是网络或代理不稳定。实时网页区域已经保留，稍后再点“开始操作网页”即可重试。'
+    return '网页暂时打不开，可能是网络不稳定。稍后再点“开始查看”即可重试。'
   }
   return message.length > 160 ? message.slice(0, 160) + '…' : message
 }

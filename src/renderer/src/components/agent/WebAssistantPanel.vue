@@ -32,9 +32,9 @@ const emit = defineEmits([
       <section class="card control-card">
         <div class="control-title-row">
           <div>
-            <h2 class="section-title">你想让它怎么操作网页？</h2>
+            <h2 class="section-title">这次要看哪个网页任务？</h2>
             <p class="helper-copy">
-              适合点按钮、填搜索框、滚动网页。会慢速演示每一步，方便你看清楚。
+              适合搜索、打开链接、滚动页面。每一步都会留在下面，方便回看。
             </p>
           </div>
           <span class="state-pill" :class="'state-' + state">{{ stateLabel[state] || state }}</span>
@@ -55,7 +55,7 @@ const emit = defineEmits([
             @click="emit('start')"
             :disabled="running || !goalInput.trim()"
           >
-            {{ running ? '正在帮你看网页...' : '开始操作网页' }}
+            {{ running ? '正在查看网页...' : '开始查看' }}
           </button>
           <button class="btn btn-secondary" @click="emit('stop')" v-if="running">停止</button>
           <button class="btn btn-outline" @click="emit('clear')" v-if="!running && steps.length > 0">
@@ -77,7 +77,7 @@ const emit = defineEmits([
         <div class="error-msg" v-if="friendlyError">
           {{ friendlyError }}
           <p v-if="rawError.includes('VISION_API_KEY')" class="config-hint">
-            需要在 .env 里配置 VISION_API_KEY、VISION_BASE_URL、VISION_MODEL。
+            请先补充网页查看配置，再重新打开这一项。
           </p>
         </div>
         <div class="answer-msg" v-if="answer && state === 'done'">{{ answer }}</div>
@@ -86,14 +86,14 @@ const emit = defineEmits([
       <section class="card dom-debug-card">
         <div class="steps-header">
           <div>
-            <h2 class="section-title">DOM 调试面板</h2>
-            <p class="url-text">模型只会看到下面这些候选，不会吃完整 DOM 树。</p>
+            <h2 class="section-title">页面线索</h2>
+            <p class="url-text">这里列出当前页面里可能会用到的按钮、输入框和链接。</p>
           </div>
           <span class="step-count">{{ domCandidates.length }} / {{ domElementCount }} 个</span>
         </div>
 
         <div class="empty-steps" v-if="domCandidates.length === 0">
-          还没有 DOM 候选。开始操作后会显示搜索框、按钮、链接等可操作元素。
+          还没有页面线索。开始后会显示搜索框、按钮、链接等可操作元素。
         </div>
 
         <div class="dom-list" v-else>
@@ -117,12 +117,12 @@ const emit = defineEmits([
 
       <section class="card steps-card">
         <div class="steps-header">
-          <h2 class="section-title">它做了什么</h2>
+          <h2 class="section-title">操作记录</h2>
           <span class="step-count">{{ steps.length }} 步</span>
         </div>
 
         <div class="empty-steps" v-if="steps.length === 0">
-          学伴还没有开始操作。它每做一步，都会显示在这里。
+          还没开始。后面的每一步都会记录在这里。
         </div>
 
         <div class="steps-list" v-else>
@@ -147,7 +147,7 @@ const emit = defineEmits([
             <p class="url-text" v-if="currentUrl">
               {{ currentTitle || '当前网页' }} · {{ currentUrl }}
             </p>
-            <p class="url-text" v-else>开始后这里会显示固定的实时网页区域</p>
+            <p class="url-text" v-else>开始后，这里会固定显示当前网页</p>
           </div>
           <span class="live-badge">固定区域</span>
         </div>
@@ -161,7 +161,7 @@ const emit = defineEmits([
           <div v-else class="screenshot-placeholder">
             <span class="book-icon">🖱️</span>
             <strong>还没有打开网页</strong>
-            <small>点击“开始操作网页”后，会在这个固定区域显示实时网页。</small>
+            <small>点击“开始查看”后，网页会显示在这个固定区域。</small>
           </div>
         </div>
       </section>

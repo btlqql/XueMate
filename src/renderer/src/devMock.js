@@ -15,7 +15,7 @@ function installBrowserPreviewMocks() {
   const conversations = [
     {
       id: 'preview-chat',
-      title: '浏览器预览对话',
+      title: '试用对话',
       createdAt: now,
       updatedAt: now
     }
@@ -25,7 +25,7 @@ function installBrowserPreviewMocks() {
       {
         id: 'm1',
         role: 'assistant',
-        content: '这是前端浏览器预览模式。完整聊天、资料导入和网页控制需要在 Electron 应用里运行。',
+        content: '这里是试用模式，可以先看看页面和基本流程。完整的软件窗口里可以使用资料导入、聊天和网页查看。',
         timestamp: now
       }
     ]
@@ -35,7 +35,7 @@ function installBrowserPreviewMocks() {
     {
       id: 'default',
       name: '默认资料库',
-      description: '浏览器预览数据',
+      description: '试用数据',
       docCount: 2,
       chunkCount: 8,
       createdAt: now,
@@ -82,16 +82,16 @@ function installBrowserPreviewMocks() {
       ok({
         id: `preview-${Date.now()}`,
         name,
-        description: '浏览器预览资料夹',
+        description: '试用资料夹',
         docCount: 0,
         chunkCount: 0,
         createdAt: Date.now(),
         updatedAt: Date.now()
       }),
-    selectAndImport: () => fail('浏览器预览不能读取本地文件，请在 Electron 应用中导入资料'),
-    importFile: () => fail('浏览器预览不能读取本地文件，请在 Electron 应用中导入资料'),
+    selectAndImport: () => fail('试用模式暂时不能读取本地文件，请在完整软件窗口中导入资料。'),
+    importFile: () => fail('试用模式暂时不能读取本地文件，请在完整软件窗口中导入资料。'),
     documents: () => ok(docs),
-    delete: () => fail('浏览器预览不会删除真实资料'),
+    delete: () => fail('试用模式不会删除资料。'),
     stats: () => ok({ docCount: docs.length, chunkCount: 8 }),
     learningGraph: () =>
       ok({
@@ -116,7 +116,7 @@ function installBrowserPreviewMocks() {
     getConversation: (id) => ok({ id, messages: messages[id] || [] }),
     createConversation: () => {
       const id = `preview-${Date.now()}`
-      conversations.unshift({ id, title: '新预览对话', createdAt: Date.now(), updatedAt: Date.now() })
+      conversations.unshift({ id, title: '新对话', createdAt: Date.now(), updatedAt: Date.now() })
       messages[id] = []
       return ok(id)
     },
@@ -127,7 +127,7 @@ function installBrowserPreviewMocks() {
       return ok(true)
     },
     sendMessage: (convId, content) => {
-      const reply = `浏览器预览已收到：“${content}”。真实 AI 回复需要 Electron 主进程和模型密钥。`
+      const reply = `已收到：“${content}”。试用模式只展示流程，完整软件窗口里会继续给出详细回复。`
       messages[convId] = messages[convId] || []
       messages[convId].push({ id: `u-${Date.now()}`, role: 'user', content, timestamp: Date.now() })
       messages[convId].push({ id: `a-${Date.now()}`, role: 'assistant', content: reply, timestamp: Date.now() })
@@ -173,44 +173,44 @@ function installBrowserPreviewMocks() {
         JSON.stringify({
           tasks: [
             {
-              title: '预览任务',
+              title: '整理作业通知',
               deadline: '无',
               deadlineDate: '',
               format: '不限',
               naming: '',
-              note: '浏览器预览不会调用真实模型'
+              note: '试用模式示例'
             }
           ],
-          checklist: ['在 Electron 应用中运行可获得真实解析结果']
+          checklist: ['确认提交格式', '检查文件命名', '留意截止时间']
         })
       ),
     tutorCode: () =>
       ok(
         JSON.stringify({
           errors: [],
-          suggestions: ['这是浏览器预览结果，真实辅导需要模型接口。'],
-          tips: ['先确认完整 Electron 应用能启动。']
+          suggestions: ['先看循环范围，再检查边界条件。'],
+          tips: ['把容易出错的地方单独写成一条检查项。']
         })
       ),
     generateReview: () =>
       ok(
         JSON.stringify({
-          course: '浏览器预览课程',
+          course: '数据结构',
           chapters: [
             { title: '核心概念', freq: 5, points: ['定义', '应用场景', '常见误区'] },
             { title: '例题训练', freq: 4, points: ['基础题', '变式题', '错题复盘'] },
             { title: '综合复习', freq: 3, points: ['知识串联', '限时练习'] }
           ],
-          tips: ['真实复习提纲需要 Electron 主进程调用模型生成。', '现在展示的是浏览器预览数据。']
+          tips: ['先把概念过一遍，再集中做错题。', '每天留十分钟回看前一天的薄弱点。']
         })
       ),
-    judgeCode: () => ok(JSON.stringify({ passed: false, feedback: '浏览器预览不会执行真实判题。' })),
-    generateProblems: () => ok(JSON.stringify({ problems: ['预览练习题'] }))
+    judgeCode: () => ok(JSON.stringify({ passed: false, feedback: '试用模式下只展示提交流程。' })),
+    generateProblems: () => ok(JSON.stringify({ problems: ['两数之和练习题'] }))
   }
 
   window.file = {
-    selectPDF: () => fail('浏览器预览不能打开系统文件选择器'),
-    checkPDF: () => fail('浏览器预览不能解析本地 PDF')
+    selectPDF: () => fail('试用模式暂时不能选择本地文件。'),
+    checkPDF: () => fail('试用模式暂时不能检查本地 PDF。')
   }
 
   window.quickSearch = {
@@ -219,21 +219,21 @@ function installBrowserPreviewMocks() {
         query,
         mode: 'local',
         summary:
-          '这是浏览器预览结果。真实运行时，XueMate 会调用本地或云端搜索服务，把网页资料整理成适合学生阅读的总结。',
+          '先给你一版整理结果：可以从题型、知识点和练习材料三个方向看。完整软件窗口里会继续补充来源和细节。',
         sources: [
           {
-            title: '预览资料源',
+            title: '示例资料来源',
             url: 'https://example.com/xuemate-preview',
-            level: '预览',
+            level: '示例',
             scores: {
-              level: '预览',
+              level: '示例',
               overall: 0
             }
           }
         ],
         stages: [
           {
-            name: '浏览器预览',
+            name: '试用模式',
             status: 'done',
             detail: `已接收查询：${query}`,
             at: new Date().toISOString()
@@ -243,7 +243,7 @@ function installBrowserPreviewMocks() {
   }
 
   window.webAssistant = {
-    start: () => fail('浏览器预览不能控制 Electron 内置网页'),
+    start: () => fail('试用模式暂时不能打开内置网页，请在完整软件窗口中使用。'),
     stop: () => ok(true),
     setLiveBounds: () => ok(true),
     onUpdate: () => () => {}

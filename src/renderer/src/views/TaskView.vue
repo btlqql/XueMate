@@ -106,7 +106,7 @@ const deleteTask = async (task) => {
   <div class="fade-in">
     <div class="page-header">
       <h1 class="page-title">任务解析</h1>
-      <p class="page-desc">粘贴作业要求，自动提取关键信息，生成待办清单</p>
+      <p class="page-desc">把通知或作业要求贴进来，整理成清楚的待办事项</p>
     </div>
 
     <div class="task-layout">
@@ -120,7 +120,7 @@ const deleteTask = async (task) => {
         ></textarea>
         <div class="button-group">
           <button class="btn btn-primary" @click="parseTask" :disabled="loading">
-            {{ loading ? '解析中...' : '开始解析' }}
+            {{ loading ? '整理中...' : '整理任务' }}
           </button>
           <button class="btn btn-outline" @click="loadSample">示例</button>
         </div>
@@ -175,7 +175,7 @@ const deleteTask = async (task) => {
       </div>
 
       <div class="card empty-state" v-else-if="!loading">
-        <p>还没有任务，粘贴作业要求开始解析吧</p>
+        <p>还没有待办。把作业通知贴进来，就能整理成清单。</p>
       </div>
     </div>
   </div>

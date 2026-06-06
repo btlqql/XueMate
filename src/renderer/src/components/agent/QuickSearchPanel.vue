@@ -13,8 +13,8 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
 <template>
   <div class="helper-layout">
     <section class="card control-card">
-      <h2 class="section-title">你想查什么？</h2>
-      <p class="helper-copy">适合问知识点、找练习题、查学习方法。它会直接搜索网页文字并总结。</p>
+      <h2 class="section-title">想找什么资料？</h2>
+      <p class="helper-copy">可以找练习题、知识点解释，也可以查学习方法。</p>
       <div class="search-row">
         <input
           :value="searchInput"
@@ -29,7 +29,7 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
           @click="emit('search')"
           :disabled="searching || !searchInput.trim()"
         >
-          {{ searching ? '查找中...' : '开始查' }}
+          {{ searching ? '查找中...' : '查一下' }}
         </button>
       </div>
       <div class="sample-row" v-if="!searching && !searchResult">
@@ -49,7 +49,7 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
       <div class="result-head">
         <h2 class="section-title">查到的内容</h2>
         <div class="mode-badge" :class="searchResult.mode === 'cloud' ? 'cloud' : 'local'">
-          {{ searchResult.mode === 'cloud' ? '云端网络资源分析' : '本地快速搜索' }}
+          {{ searchResult.mode === 'cloud' ? '网页整理结果' : '快速整理结果' }}
         </div>
       </div>
       <div class="cloud-meta" v-if="searchResult.mode === 'cloud'">
@@ -88,7 +88,7 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
     </section>
 
     <section class="card tips-card" v-if="!searchResult && !searching">
-      <h2 class="section-title">快速查资料适合做什么</h2>
+      <h2 class="section-title">适合这些场景</h2>
       <div class="feature-grid">
         <div class="feature">
           <strong>找练习题</strong>
@@ -96,15 +96,15 @@ const emit = defineEmits(['update:searchInput', 'search', 'sample'])
         </div>
         <div class="feature">
           <strong>解释知识点</strong>
-          <p>把网页内容整理成适合学生读的总结。</p>
+          <p>把网页里的长内容压成几段重点。</p>
         </div>
         <div class="feature">
-          <strong>云端筛选</strong>
-          <p>高级模式可按适龄性、可信度、可读性给网页评分。</p>
+          <strong>挑一挑来源</strong>
+          <p>优先看更适合学习、表达更清楚的内容。</p>
         </div>
         <div class="feature">
           <strong>更快</strong>
-          <p>比操作网页更快，适合普通查询。</p>
+          <p>不用一步步点网页，先拿到一版可读结果。</p>
         </div>
       </div>
     </section>

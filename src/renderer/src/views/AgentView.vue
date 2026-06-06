@@ -35,7 +35,7 @@ const {
   <div class="fade-in agent-view">
     <div class="page-header">
       <h1 class="page-title">小实验</h1>
-      <p class="page-desc">这里有两个能力：直接查资料，或者让学伴一步一步操作网页</p>
+      <p class="page-desc">一个适合快速找资料，一个适合边看网页边操作</p>
     </div>
 
     <div class="mode-tabs">
@@ -46,8 +46,8 @@ const {
       >
         <span class="mode-icon">🔎</span>
         <span>
-          <strong>快速查资料</strong>
-          <small>直接找答案，不点网页</small>
+          <strong>查资料</strong>
+          <small>先看一版整理结果</small>
         </span>
       </button>
       <button
@@ -57,8 +57,8 @@ const {
       >
         <span class="mode-icon">🖱️</span>
         <span>
-          <strong>操作网页</strong>
-          <small>看实时网页，帮你点击输入</small>
+          <strong>看网页</strong>
+          <small>打开网页后一步步处理</small>
         </span>
       </button>
     </div>

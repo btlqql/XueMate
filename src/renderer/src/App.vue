@@ -52,7 +52,7 @@ const isBrowserPreview = typeof window !== 'undefined' && window.__XUEMATE_BROWS
           </svg>
         </div>
         <h1 class="app-name">XueMate</h1>
-        <p class="app-tagline">学伴助手</p>
+        <p class="app-tagline">学习整理台</p>
       </div>
 
       <nav class="nav-list">
@@ -73,7 +73,7 @@ const isBrowserPreview = typeof window !== 'undefined' && window.__XUEMATE_BROWS
       </nav>
 
       <div class="sidebar-footer">
-        <div v-if="isBrowserPreview" class="preview-pill">浏览器预览</div>
+        <div v-if="isBrowserPreview" class="preview-pill">试用模式</div>
         <div class="user-info">
           <div class="avatar">
             <svg viewBox="0 0 120 120" width="40" height="40">
