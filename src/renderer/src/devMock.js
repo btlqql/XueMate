@@ -307,14 +307,39 @@ function installBrowserPreviewMocks() {
         mode: 'local',
         summary:
           '先给你一版整理结果：可以从题型、知识点和练习材料三个方向看。完整软件窗口里会继续补充来源和细节。',
+        results: [
+          {
+            score: 0.86,
+            denseScore: 0.82,
+            lexicalScore: 0.74,
+            rankReason: ['关键词命中', '语义接近'],
+            chunk: {
+              id: 'preview-chunk-1',
+              docId: 'doc-1',
+              collectionId: 'default',
+              fileName: 'Python循环与列表.pdf',
+              content:
+                '循环适合处理重复步骤，列表适合保存一组有顺序的数据。学习时可以先找变量变化，再看循环停止条件。',
+              startPos: 128,
+              endPos: 184
+            }
+          }
+        ],
         sources: [
           {
             title: '示例资料来源',
             url: 'https://example.com/xuemate-preview',
+            text: '这是一段预览来源内容，用来展示网页摘要、可信度和引用卡片的排版效果。',
             level: '示例',
             scores: {
+              relevance: 0.82,
+              readability: 0.9,
+              ageFit: 0.88,
+              trust: 0.76,
+              adNoise: 0.1,
               level: '示例',
-              overall: 0
+              overall: 0.84,
+              reason: '内容简短，适合先了解基本概念'
             }
           }
         ],
