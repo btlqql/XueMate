@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import './services/consolePipeGuard'
 import { app, shell, BrowserWindow, ipcMain, dialog, Notification } from 'electron'
 import { join, basename } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
