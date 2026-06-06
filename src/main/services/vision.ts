@@ -1,17 +1,25 @@
 import { net } from 'electron'
+import { vertexVisionJson } from './googleVertexVision'
 // 普通多模态模型调用：OpenAI-compatible Chat Completions。
+// 如果设置 VISION_PROVIDER=google-vertex，则走 Vertex AI Gemini generateContent 做多模态理解。
 // 推荐环境变量：
 // VISION_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
 // VISION_API_KEY=你的多模态模型 key
 // VISION_MODEL=gemini-2.5-flash 或 qwen-vl-plus
 // VISION_FALLBACK_MODELS=gemini-2.5-flash-lite,qwen-vl-plus
 
+const VISION_PROVIDER = process.env.VISION_PROVIDER || ''
 const VISION_API_KEY = process.env.VISION_API_KEY || process.env.GEMINI_API_KEY || ''
 const VISION_BASE_URL =
   process.env.VISION_BASE_URL ||
   'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-const VISION_MODEL = process.env.VISION_MODEL || 'gemini-2.5-flash'
-const VISION_FALLBACK_MODELS = process.env.VISION_FALLBACK_MODELS || ''
+const VISION_MODEL =
+  process.env.VISION_MODEL ||
+  (isGoogleVertexProvider()
+    ? process.env.GOOGLE_VERTEX_VISION_MODEL || 'gemini-2.5-flash'
+    : 'gemini-2.5-flash')
+const VISION_FALLBACK_MODELS =
+  process.env.VISION_FALLBACK_MODELS || process.env.GOOGLE_VERTEX_VISION_FALLBACK_MODELS || ''
 
 export interface VisionJsonOptions {
   prompt: string
@@ -22,7 +30,7 @@ export interface VisionJsonOptions {
 }
 
 export async function visionJson<T = any>(options: VisionJsonOptions): Promise<T> {
-  if (!VISION_API_KEY) {
+  if (!isGoogleVertexProvider() && !VISION_API_KEY) {
     throw new Error('缺少 VISION_API_KEY 或 GEMINI_API_KEY，请先配置多模态模型密钥')
   }
 
@@ -64,6 +72,10 @@ interface VisionFailure {
 }
 
 async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T> {
+  if (isGoogleVertexProvider()) {
+    return vertexVisionJson<T>(options)
+  }
+
   const {
     prompt,
     screenshotBase64,
@@ -127,7 +139,9 @@ async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T
       ;(timeoutError as any).retryable = true
       throw timeoutError
     }
-    if (/^net::ERR_|ERR_NETWORK|ERR_TIMED_OUT|ERR_CONNECTION|ERR_PROXY/i.test(error.message || '')) {
+    if (
+      /^net::ERR_|ERR_NETWORK|ERR_TIMED_OUT|ERR_CONNECTION|ERR_PROXY/i.test(error.message || '')
+    ) {
       const networkError = new Error(`网络连接不稳定：${error.message}`)
       ;(networkError as any).retryable = true
       throw networkError
@@ -144,14 +158,22 @@ async function requestVisionJson<T = any>(options: VisionJsonOptions): Promise<T
 }
 
 function buildModelList(primaryModel: string): string[] {
-  const defaults = isGoogleVisionEndpoint()
+  const defaults = isGoogleVertexProvider()
     ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
-    : []
+    : isGoogleVisionEndpoint()
+      ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
+      : []
   const configuredFallbacks = VISION_FALLBACK_MODELS.split(',')
     .map((item) => item.trim())
     .filter(Boolean)
 
   return [...new Set([primaryModel, ...configuredFallbacks, ...defaults].filter(Boolean))]
+}
+
+function isGoogleVertexProvider(): boolean {
+  return (
+    /^(google-vertex|vertex)$/i.test(VISION_PROVIDER) || /^google-vertex$/i.test(VISION_BASE_URL)
+  )
 }
 
 function isGoogleVisionEndpoint(): boolean {
