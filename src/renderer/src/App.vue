@@ -1,11 +1,9 @@
 <script setup>
-import { ref, markRaw } from 'vue'
+import { computed, ref, markRaw } from 'vue'
 import ChatView from './views/ChatView.vue'
 import ToolView from './views/ToolView.vue'
 import AgentView from './views/AgentView.vue'
 import KnowledgeView from './views/KnowledgeView.vue'
-
-const currentView = ref('knowledge')
 
 const viewMap = {
   chat: markRaw(ChatView),
@@ -20,6 +18,73 @@ const navItems = [
   { id: 'knowledge', label: '我的资料' },
   { id: 'agent', label: '小实验' }
 ]
+
+const defaultView = 'knowledge'
+const routeViewIds = new Set(navItems.map((item) => item.id))
+const currentRoute = ref(createRoute({ view: defaultView }))
+
+const currentView = computed(() => currentRoute.value.view)
+const currentComponent = computed(() => viewMap[currentView.value] || viewMap[defaultView])
+const routePayload = computed(() => currentRoute.value.payload)
+
+function isRouteObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function hasRouteKey(route, key) {
+  return Object.prototype.hasOwnProperty.call(route, key)
+}
+
+function resolveView(view, fallbackView = defaultView) {
+  return typeof view === 'string' && routeViewIds.has(view) ? view : fallbackView
+}
+
+function resolveTextSlot(route, key, fallbackValue) {
+  if (!hasRouteKey(route, key)) return fallbackValue
+  const value = route[key]
+  return typeof value === 'string' ? value : null
+}
+
+function resolvePayload(route, fallbackValue) {
+  return hasRouteKey(route, 'payload') ? route.payload : fallbackValue
+}
+
+function createRoute(route) {
+  return {
+    view: resolveView(route.view),
+    tool: resolveTextSlot(route, 'tool', null),
+    mode: resolveTextSlot(route, 'mode', null),
+    payload: resolvePayload(route, null)
+  }
+}
+
+function normalizeRouteTarget(target) {
+  if (typeof target === 'string') {
+    return createRoute({ view: target })
+  }
+
+  if (!isRouteObject(target)) {
+    return currentRoute.value
+  }
+
+  const hasExplicitView = hasRouteKey(target, 'view')
+  const fallbackView = hasExplicitView ? defaultView : currentRoute.value.view
+  const nextView = resolveView(target.view, fallbackView)
+  const fallbackTool = hasExplicitView ? null : currentRoute.value.tool
+  const fallbackMode = hasExplicitView ? null : currentRoute.value.mode
+  const fallbackPayload = hasExplicitView ? null : currentRoute.value.payload
+
+  return {
+    view: nextView,
+    tool: resolveTextSlot(target, 'tool', fallbackTool),
+    mode: resolveTextSlot(target, 'mode', fallbackMode),
+    payload: resolvePayload(target, fallbackPayload)
+  }
+}
+
+function navigate(target) {
+  currentRoute.value = normalizeRouteTarget(target)
+}
 </script>
 
 <template>
@@ -43,7 +108,7 @@ const navItems = [
           :key="item.id"
           class="nav-item"
           :class="{ active: currentView === item.id }"
-          @click="currentView = item.id"
+          @click="navigate(item.id)"
         >
           <span class="nav-dot"></span>
           <span>{{ item.label }}</span>
@@ -117,7 +182,12 @@ const navItems = [
     </aside>
 
     <main class="main-content" :class="{ 'chat-mode': currentView === 'chat' }">
-      <component :is="viewMap[currentView]" @navigate="currentView = $event" />
+      <component
+        :is="currentComponent"
+        :current-route="currentRoute"
+        :route-payload="routePayload"
+        @navigate="navigate"
+      />
     </main>
   </div>
 </template>

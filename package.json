@@ -20,14 +20,7 @@
     "bench:rag": "node scripts/rag-benchmark.mjs",
     "bench:memory": "node scripts/memory-benchmark.mjs",
     "mcp:build": "cargo build --release --manifest-path mcp-gateway-rs/Cargo.toml",
-    "bench:mcp": "node scripts/bench-mcp-layer.mjs",
-    "cloud:dev": "node cloud/gateway/server.mjs",
-    "cloud:docker": "cd cloud && docker compose up -d",
-    "cloud:docker:ps": "cd cloud && docker compose ps",
-    "cloud:docker:down": "cd cloud && docker compose down",
-    "cloud:docker:light": "cd cloud && docker compose up -d",
-    "cloud:docker:full": "cd cloud && docker compose -f docker-compose.yml -f docker-compose.full.yml up -d",
-    "cloud:docker:server": "cd cloud && docker compose -f docker-compose.yml -f docker-compose.full.yml -f docker-compose.server.yml up -d"
+    "bench:mcp": "node scripts/bench-mcp-layer.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "3.0.2",
