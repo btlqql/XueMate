@@ -8,6 +8,10 @@ function fail(error) {
   return Promise.resolve({ success: false, error })
 }
 
+function success(extra = {}) {
+  return Promise.resolve({ success: true, ...extra })
+}
+
 function installBrowserPreviewMocks() {
   if (window.electron || window.__XUEMATE_BROWSER_PREVIEW__) return
   window.__XUEMATE_BROWSER_PREVIEW__ = true
@@ -25,7 +29,8 @@ function installBrowserPreviewMocks() {
       {
         id: 'm1',
         role: 'assistant',
-        content: '这里是试用模式，可以先看看页面和基本流程。完整的软件窗口里可以使用资料导入、聊天和网页查看。',
+        content:
+          '这里是试用模式，可以先看看页面和基本流程。完整的软件窗口里可以使用资料导入、聊天和网页查看。',
         timestamp: now
       }
     ]
@@ -63,8 +68,38 @@ function installBrowserPreviewMocks() {
   const streamListeners = {
     token: new Set(),
     done: new Set(),
-    error: new Set()
+    error: new Set(),
+    event: new Set()
   }
+  const tasksList = []
+
+  const resolveDocuments = (collectionId) =>
+    collectionId && collectionId !== 'all'
+      ? docs.filter((doc) => doc.collectionId === collectionId)
+      : docs
+
+  const refreshCollectionStats = () => {
+    collections.forEach((collection) => {
+      const collectionDocs = docs.filter((doc) => doc.collectionId === collection.id)
+      collection.docCount = collectionDocs.length
+      collection.chunkCount = collectionDocs.reduce(
+        (sum, doc) => sum + Number(doc.chunkCount || 0),
+        0
+      )
+      collection.updatedAt = collection.updatedAt || now
+    })
+  }
+
+  const emitChatEvent = (event) => {
+    streamListeners.event.forEach((fn) => fn(event))
+    if (event.type === 'token')
+      streamListeners.token.forEach((fn) => fn(String(event.payload || '')))
+    if (event.type === 'done') streamListeners.done.forEach((fn) => fn(String(event.payload || '')))
+    if (event.type === 'error')
+      streamListeners.error.forEach((fn) => fn(String(event.payload || '')))
+  }
+
+  refreshCollectionStats()
 
   window.electron = {
     process: {
@@ -78,8 +113,8 @@ function installBrowserPreviewMocks() {
 
   window.rag = {
     collections: () => ok(collections),
-    createCollection: (name) =>
-      ok({
+    createCollection: (name) => {
+      const newCollection = {
         id: `preview-${Date.now()}`,
         name,
         description: '试用资料夹',
@@ -87,12 +122,21 @@ function installBrowserPreviewMocks() {
         chunkCount: 0,
         createdAt: Date.now(),
         updatedAt: Date.now()
-      }),
+      }
+      collections.push(newCollection)
+      return ok(newCollection)
+    },
     selectAndImport: () => fail('试用模式暂时不能读取本地文件，请在完整软件窗口中导入资料。'),
     importFile: () => fail('试用模式暂时不能读取本地文件，请在完整软件窗口中导入资料。'),
-    documents: () => ok(docs),
+    documents: (collectionId) => ok(resolveDocuments(collectionId)),
     delete: () => fail('试用模式不会删除资料。'),
-    stats: () => ok({ docCount: docs.length, chunkCount: 8 }),
+    stats: (collectionId) => {
+      const filteredDocs = resolveDocuments(collectionId)
+      return ok({
+        docCount: filteredDocs.length,
+        chunkCount: filteredDocs.reduce((sum, doc) => sum + Number(doc.chunkCount || 0), 0)
+      })
+    },
     learningGraph: () =>
       ok({
         nodes: [
@@ -126,16 +170,39 @@ function installBrowserPreviewMocks() {
       delete messages[id]
       return ok(true)
     },
-    sendMessage: (convId, content) => {
+    sendMessage: (convId, content, options = {}) => {
+      const requestId = options?.requestId || `preview-chat-${Date.now()}`
       const reply = `已收到：“${content}”。试用模式只展示流程，完整软件窗口里会继续给出详细回复。`
+      const timestamp = Date.now()
       messages[convId] = messages[convId] || []
-      messages[convId].push({ id: `u-${Date.now()}`, role: 'user', content, timestamp: Date.now() })
-      messages[convId].push({ id: `a-${Date.now()}`, role: 'assistant', content: reply, timestamp: Date.now() })
+      messages[convId].push({ id: `u-${timestamp}`, role: 'user', content, timestamp })
+      messages[convId].push({ id: `a-${timestamp}`, role: 'assistant', content: reply, timestamp })
+
+      const conversation = conversations.find((item) => item.id === convId)
+      if (conversation) {
+        conversation.title = String(content || '').slice(0, 18) || conversation.title
+        conversation.updatedAt = timestamp
+      }
+
       setTimeout(() => {
-        streamListeners.token.forEach((fn) => fn(reply))
-        streamListeners.done.forEach((fn) => fn(reply))
+        emitChatEvent({
+          requestId,
+          convId,
+          source: 'chat',
+          type: 'token',
+          payload: reply,
+          ts: Date.now()
+        })
+        emitChatEvent({
+          requestId,
+          convId,
+          source: 'chat',
+          type: 'done',
+          payload: reply,
+          ts: Date.now()
+        })
       }, 120)
-      return ok(true)
+      return success({ streaming: true, requestId })
     },
     getMemory: () => ok({ profile: {}, atoms: [] }),
     onStreamToken: (callback) => {
@@ -149,22 +216,40 @@ function installBrowserPreviewMocks() {
     onStreamError: (callback) => {
       streamListeners.error.add(callback)
       return () => streamListeners.error.delete(callback)
+    },
+    onStreamEvent: (callback) => {
+      streamListeners.event.add(callback)
+      return () => streamListeners.event.delete(callback)
     }
   }
 
   window.task = {
-    getAll: () => ok([]),
-    add: (tasks) =>
-      ok(
-        tasks.map((task, index) => ({
-          id: `preview-task-${Date.now()}-${index}`,
-          ...task,
-          createdAt: Date.now()
-        }))
-      ),
-    update: () => ok(true),
-    delete: () => ok(true),
-    toggle: () => ok(true)
+    getAll: () => ok(tasksList),
+    add: (tasks) => {
+      const timestamp = Date.now()
+      const newTasks = tasks.map((task, index) => ({
+        id: `preview-task-${timestamp}-${index}`,
+        ...task,
+        createdAt: timestamp
+      }))
+      tasksList.push(...newTasks)
+      return ok(tasksList)
+    },
+    update: (id, fields = {}) => {
+      const task = tasksList.find((item) => item.id === id)
+      if (task) Object.assign(task, fields)
+      return ok(true)
+    },
+    delete: (id) => {
+      const index = tasksList.findIndex((task) => task.id === id)
+      if (index >= 0) tasksList.splice(index, 1)
+      return ok(true)
+    },
+    toggle: (id) => {
+      const task = tasksList.find((item) => item.id === id)
+      if (task) task.status = task.status === 'done' ? 'pending' : 'done'
+      return ok(true)
+    }
   }
 
   window.llm = {
@@ -214,6 +299,8 @@ function installBrowserPreviewMocks() {
   }
 
   window.quickSearch = {
+    history: () => ok([]),
+    onBackgroundUpdate: () => () => {},
     run: (query) =>
       ok({
         query,

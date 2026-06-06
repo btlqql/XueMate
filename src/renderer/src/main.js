@@ -1,5 +1,12 @@
 import { createApp } from 'vue'
-import './devMock'
 import App from './App.vue'
 
-createApp(App).mount('#app')
+async function bootstrap() {
+  if (import.meta.env.DEV && typeof window !== 'undefined' && !window.electron) {
+    await import('./devMock')
+  }
+
+  createApp(App).mount('#app')
+}
+
+bootstrap()
