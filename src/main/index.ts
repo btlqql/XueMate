@@ -40,6 +40,7 @@ import * as rag from './services/rag'
 import { buildLearningGraph } from './services/learningGraph'
 import { startRendererBridge, stopRendererBridge } from './services/rendererBridge'
 import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdgeRuntime'
+import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge'
 import * as taskStore from './services/taskStore'
 import * as quickSearchStore from './services/quickSearchStore'
 import { ensureEnoughText, extractTextFromFile } from './services/document'
@@ -96,6 +97,46 @@ function getErrorMessage(error: unknown, fallback = '未知错误'): string {
   if (error instanceof Error && error.message) return error.message
   if (typeof error === 'string' && error.trim()) return error
   return fallback
+}
+
+function getPeerEdgeChatDecision(args: {
+  collectionId: string
+  localCount: number
+  localTopScore: number
+}): { enabled: boolean; reason: string } {
+  const flag = (process.env.XUEMATE_PEEREDGE_CHAT || 'auto').trim().toLowerCase()
+  if (['0', 'false', 'off', 'no'].includes(flag)) {
+    return { enabled: false, reason: 'disabled by XUEMATE_PEEREDGE_CHAT' }
+  }
+  if (['1', 'true', 'on', 'yes', 'always', 'force'].includes(flag)) {
+    return { enabled: true, reason: `forced by XUEMATE_PEEREDGE_CHAT=${flag}` }
+  }
+  if (args.collectionId === rag.RAG_OFF_ID) {
+    return { enabled: false, reason: 'RAG is off for this chat' }
+  }
+  // 本机资料命中很强时不打扰 PeerEdge，避免增加延迟；其余情况让班级边缘资料补充。
+  if (args.localCount >= 3 && args.localTopScore >= 0.42) {
+    return {
+      enabled: false,
+      reason: `local RAG is strong: count=${args.localCount}, topScore=${args.localTopScore.toFixed(3)}`
+    }
+  }
+  return {
+    enabled: true,
+    reason: `local RAG weak enough: count=${args.localCount}, topScore=${args.localTopScore.toFixed(3)}`
+  }
+}
+
+function peerEdgeChatTimeoutMs(): number {
+  const parsed = Number(process.env.XUEMATE_PEEREDGE_CHAT_TIMEOUT_MS)
+  if (!Number.isFinite(parsed)) return 900
+  return Math.max(250, Math.min(parsed, 3000))
+}
+
+function peerEdgeChatFanout(): number {
+  const parsed = Number(process.env.XUEMATE_PEEREDGE_CHAT_FANOUT)
+  if (!Number.isFinite(parsed)) return 4
+  return Math.max(1, Math.min(parsed, 8))
 }
 
 function createWindow(): void {
@@ -494,8 +535,11 @@ function registerLLMHandlers(): void {
           ? conv.messages.slice(-20).map((m) => ({ role: m.role, content: m.content }))
           : [{ role: 'user' as const, content }]
 
-        // 4. RAG 检索（如果有知识库）
+        // 4. RAG 检索（如果有知识库）+ PeerEdge 边缘补充（后台隐藏）
         let ragContext = ''
+        let peerEdgeContext = ''
+        let localRagCount = 0
+        let localRagTopScore = 0
         const ragCollectionId = options?.collectionId || rag.ALL_COLLECTIONS_ID
         const stats =
           ragCollectionId === rag.RAG_OFF_ID
@@ -509,6 +553,8 @@ function registerLLMHandlers(): void {
               minScore: 0.16,
               collectionId: ragCollectionId
             })
+            localRagCount = results.length
+            localRagTopScore = results[0]?.score || 0
             if (results.length > 0 && results[0].score > 0.24) {
               ragContext = rag.buildRagContext(results, {
                 title: '以下是用户课程资料中的相关内容'
@@ -519,10 +565,49 @@ function registerLLMHandlers(): void {
           }
         }
 
+        const peerEdgeDecision = getPeerEdgeChatDecision({
+          collectionId: ragCollectionId,
+          localCount: localRagCount,
+          localTopScore: localRagTopScore
+        })
+        console.log(`[PeerEdge] chat decision: ${peerEdgeDecision.enabled ? 'use' : 'skip'} (${peerEdgeDecision.reason})`)
+
+        if (peerEdgeDecision.enabled) {
+          try {
+            const peerResult = await retrievePeerEvidence(content, {
+              topK: 4,
+              collectionId: ragCollectionId === rag.RAG_OFF_ID ? rag.ALL_COLLECTIONS_ID : ragCollectionId,
+              timeoutMs: peerEdgeChatTimeoutMs(),
+              peerLimit: peerEdgeChatFanout()
+            })
+            if (peerResult.count > 0) {
+              peerEdgeContext = buildPeerEdgeContext(peerResult.evidence, {
+                maxChars: 2200,
+                title: '以下是班级边缘网络补充检索到的相关内容'
+              })
+              console.log(
+                `[PeerEdge] chat context injected, evidence=${peerResult.count}, elapsed=${peerResult.elapsedMs}ms`
+              )
+            } else if (peerResult.running && peerResult.errors.length > 0) {
+              console.log(
+                `[PeerEdge] chat context empty, errors=${peerResult.errors
+                  .slice(0, 2)
+                  .map((item) => item.error)
+                  .join('; ')}`
+              )
+            }
+          } catch (e) {
+            console.error('[PeerEdge] 聊天补充检索失败:', getErrorMessage(e))
+          }
+        }
+
         // 5. 流式调用 LLM（立即返回，token 通过 IPC 推送）
         chatStream({
           model: MODEL,
-          messages: [{ role: 'system', content: systemPrompt + ragContext }, ...recentMessages],
+          messages: [
+            { role: 'system', content: systemPrompt + ragContext + peerEdgeContext },
+            ...recentMessages
+          ],
           temperature: 0.7,
           maxTokens: 4096,
           onToken(token) {

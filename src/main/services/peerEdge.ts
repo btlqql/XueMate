@@ -141,3 +141,48 @@ export async function retrievePeerEvidence(
     }
   }
 }
+
+
+export function buildPeerEdgeContext(
+  evidence: PeerEdgeEvidenceCard[],
+  options: { maxChars?: number; title?: string } = {}
+): string {
+  if (!evidence.length) return ''
+
+  const maxChars = options.maxChars || 2200
+  const title = options.title || '以下是班级边缘网络中同伴设备返回的脱敏学习证据'
+  const blocks: string[] = []
+  const citations: string[] = []
+  let usedChars = 0
+
+  const ranked = [...evidence]
+    .filter((item) => item.snippet && item.snippet.trim())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+
+  for (let i = 0; i < ranked.length; i++) {
+    const item = ranked[i]
+    const citationId = `同伴${i + 1}`
+    const budgetLeft = maxChars - usedChars
+    if (budgetLeft < 180) break
+
+    const clipped = item.snippet.trim().slice(0, Math.min(700, budgetLeft))
+    usedChars += clipped.length
+    citations.push(`${citationId}: ${item.fileName || '班级边缘资料'} / 相关度${Math.round(item.score * 100)}`)
+    blocks.push(
+      `[${citationId}] 来源: ${item.fileName || '班级边缘资料'}\n` +
+        `边缘相关度: ${Math.round(item.score * 100)}%; ` +
+        `入选原因: ${(item.rankReason || []).slice(0, 4).join('、') || 'Bloom/Sketch 路由命中'}\n` +
+        `${clipped}`
+    )
+  }
+
+  if (!blocks.length) return ''
+
+  return (
+    `\n\n${title}（PeerEdge 已做 Bloom/Sketch 隐私路由；回答时可标注 [同伴1] 这种引用）：\n` +
+    blocks.join('\n\n---\n\n') +
+    `\n\n同伴引用索引：\n${citations.join('\n')}` +
+    '\n\n请把这些内容当作补充证据；如果它与本机资料冲突，优先说明差异，不要编造来源。'
+  )
+}

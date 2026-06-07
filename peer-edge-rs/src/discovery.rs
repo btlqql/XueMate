@@ -82,12 +82,26 @@ impl Discovery {
             }
         }
 
-        let directory = self.directory.read().await;
-        for peer in directory.values() {
-            if peer.base_url == self.config.public_base_url {
-                continue;
+        {
+            let mut directory = self.directory.write().await;
+            let ttl_ms = self.config.peer_ttl_ms.max(10_000);
+            directory.retain(|_, peer| {
+                let fresh = now.saturating_sub(peer.last_seen_ms) <= ttl_ms;
+                if !fresh {
+                    eprintln!(
+                        "[xuemate-peer-edge] peer expired from directory: {} ({})",
+                        peer.node_id, peer.base_url
+                    );
+                }
+                fresh
+            });
+
+            for peer in directory.values() {
+                if peer.base_url == self.config.public_base_url {
+                    continue;
+                }
+                merged.insert(peer.base_url.clone(), peer.clone());
             }
-            merged.insert(peer.base_url.clone(), peer.clone());
         }
 
         let mut peers = merged.into_values().collect::<Vec<_>>();

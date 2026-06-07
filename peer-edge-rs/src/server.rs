@@ -2,6 +2,7 @@ use crate::client::PeerEdgeClient;
 use crate::config::Config;
 use crate::discovery::Discovery;
 use crate::fanout::FanoutService;
+use crate::sketch::PeerEdgeSketch;
 use crate::types::{now_ms, FanoutRetrieveRequest, HealthResponse, PeerRetrieveRequest};
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -24,6 +25,7 @@ pub fn router(state: AppState) -> Router {
         .route("/peers", get(peers))
         .route("/fanout-retrieve", post(fanout_retrieve))
         .route("/api/peeredge/health", get(health))
+        .route("/api/peeredge/sketch", get(peer_sketch))
         .route("/api/peeredge/retrieve", post(peer_retrieve))
         .with_state(Arc::new(state))
 }
@@ -62,6 +64,25 @@ async fn fanout_retrieve(
     Json(request): Json<FanoutRetrieveRequest>,
 ) -> Json<crate::types::FanoutRetrieveResponse> {
     Json(state.fanout.retrieve(request).await)
+}
+
+async fn peer_sketch(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let sketch: PeerEdgeSketch = state.client.fetch_local_sketch().await.map_err(|error| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({
+                "success": false,
+                "error": error.to_string()
+            })),
+        )
+    })?;
+
+    Ok(Json(json!({
+        "success": true,
+        "data": sketch
+    })))
 }
 
 async fn peer_retrieve(

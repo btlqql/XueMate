@@ -4,6 +4,8 @@ mod config;
 mod discovery;
 mod fanout;
 mod server;
+mod sketch;
+mod sketch_cache;
 mod types;
 
 use anyhow::{Context, Result};
@@ -13,6 +15,7 @@ use config::Config;
 use discovery::Discovery;
 use fanout::FanoutService;
 use server::{router, AppState};
+use sketch_cache::SketchCache;
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -24,7 +27,14 @@ async fn main() -> Result<()> {
     }
     let client = PeerEdgeClient::new(config.clone())?;
     let cache = EvidenceCache::new(30_000, 256);
-    let fanout = FanoutService::new(config.clone(), discovery.clone(), client.clone(), cache);
+    let sketch_cache = SketchCache::new(300_000, 256);
+    let fanout = FanoutService::new(
+        config.clone(),
+        discovery.clone(),
+        client.clone(),
+        cache,
+        sketch_cache,
+    );
 
     let state = AppState {
         config: config.clone(),
