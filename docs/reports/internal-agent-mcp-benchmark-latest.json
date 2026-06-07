@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-06-07T12:50:31.259Z",
+  "createdAt": "2026-06-07T14:23:27.142Z",
   "bridgeUrl": "http://127.0.0.1:8788",
   "gatewayBinary": "/Users/wangyue/wangyue/XueMate/mcp-gateway-rs/target/release/xuemate-mcp-gateway",
   "query": "函数单调性和导数有什么关系？",
@@ -10,41 +10,41 @@
     {
       "label": "direct cold",
       "samples": 16,
-      "avgMs": 533.19,
-      "minMs": 320.42,
-      "maxMs": 859.18,
-      "p50Ms": 481.95,
-      "p95Ms": 859.18,
+      "avgMs": 467.75,
+      "minMs": 287.01,
+      "maxMs": 1108.9,
+      "p50Ms": 415.96,
+      "p95Ms": 1108.9,
       "lastCount": 4
     },
     {
       "label": "direct cached",
       "samples": 16,
-      "avgMs": 1.49,
-      "minMs": 1.16,
-      "maxMs": 2,
-      "p50Ms": 1.41,
-      "p95Ms": 2,
+      "avgMs": 1.48,
+      "minMs": 1.02,
+      "maxMs": 2.16,
+      "p50Ms": 1.44,
+      "p95Ms": 2.16,
       "lastCount": 4
     },
     {
       "label": "internal MCP cold",
       "samples": 16,
-      "avgMs": 465.12,
-      "minMs": 289.05,
-      "maxMs": 987.29,
-      "p50Ms": 440.76,
-      "p95Ms": 987.29,
+      "avgMs": 523.66,
+      "minMs": 278.67,
+      "maxMs": 949.34,
+      "p50Ms": 455.05,
+      "p95Ms": 949.34,
       "lastCount": 4
     },
     {
       "label": "internal MCP cached",
       "samples": 16,
-      "avgMs": 0.95,
-      "minMs": 0.8,
-      "maxMs": 1.24,
-      "p50Ms": 0.91,
-      "p95Ms": 1.24,
+      "avgMs": 0.1,
+      "minMs": 0.07,
+      "maxMs": 0.27,
+      "p50Ms": 0.09,
+      "p95Ms": 0.27,
       "lastCount": 4
     }
   ]

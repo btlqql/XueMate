@@ -180,6 +180,75 @@ export function startRendererBridge(port = 8788): void {
         return
       }
 
+      if (req.method === 'POST' && url.pathname === '/api/agent/ragContext') {
+        const body = await readJsonBody(req)
+        const query = String(body.query || '').trim()
+        if (!query) {
+          sendJson(res, 400, { success: false, error: 'query is required' })
+          return
+        }
+
+        const data = await withBridgeCache(
+          bridgeCacheKey(req.method, pathWithSearch(url), body),
+          async () => {
+            const collectionId = String(
+              body.collectionId || collectionIdOf(url) || rag.ALL_COLLECTIONS_ID
+            )
+            const stats =
+              collectionId === rag.RAG_OFF_ID
+                ? { docCount: 0, chunkCount: 0 }
+                : rag.getStats(collectionId)
+            if (stats.chunkCount <= 0) {
+              return {
+                query,
+                collectionId,
+                stats,
+                count: 0,
+                topScore: 0,
+                results: [],
+                context: ''
+              }
+            }
+
+            const results = await rag.retrieve(query, {
+              collectionId,
+              topK: clampNumber(body.topK, 5, 1, 20),
+              candidateK: clampNumber(body.candidateK, 48, 5, 200),
+              minScore: clampNumber(body.minScore, 0.18, 0, 1),
+              useMmr: boolFromBody(body.useMmr, true),
+              noCache: noCacheFromBody(body) || noCacheFromUrl(url)
+            })
+            const topScore = results[0]?.score || 0
+            const minInjectScore = clampNumber(body.minInjectScore, 0.24, 0, 1)
+            const includeResults = boolFromBody(body.includeResults, false)
+            const context =
+              results.length > 0 && topScore > minInjectScore
+                ? rag.buildRagContext(results, {
+                    maxChars: clampNumber(body.maxChars, 3600, 500, 12000),
+                    title: String(body.title || '以下是 XueMate 知识库检索到的真实资料')
+                  })
+                : ''
+
+            return {
+              query,
+              collectionId,
+              stats,
+              count: results.length,
+              topScore,
+              results: includeResults ? results : [],
+              context
+            }
+          },
+          { noCache: noCacheFromBody(body) || noCacheFromUrl(url) }
+        )
+
+        sendJson(res, 200, {
+          success: true,
+          data
+        })
+        return
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/peeredge/sketch') {
         const data = getLocalPeerEdgeSketch(noCacheFromUrl(url))
         sendJson(res, 200, { success: true, data })

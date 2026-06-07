@@ -159,14 +159,13 @@ async function directAgentRagContext({ noCache }) {
 }
 
 async function mcpAgentRagContext(mcp, { noCache }) {
-  const statsResponse = await mcp.tool('xuemate.rag.stats', {
-    collectionId: COLLECTION_ID,
+  const response = await mcp.tool('xuemate.agent.ragContext', {
+    ...retrieveBody,
+    minInjectScore: 0.24,
+    includeResults: false,
     noCache
   })
-  if ((statsResponse.data?.chunkCount || 0) <= 0)
-    return { stats: statsResponse.data, retrieve: null }
-  const retrieveResponse = await mcp.tool('xuemate.rag.retrieve', { ...retrieveBody, noCache })
-  return { stats: statsResponse.data, retrieve: retrieveResponse.data }
+  return { stats: response.data?.stats, retrieve: response.data }
 }
 
 async function measure(label, fn, { clearEachTime }) {
@@ -219,7 +218,7 @@ function markdown(report) {
     `- MCP cached vs direct cached avg delta: ${cachedVsDirect === null ? '-' : `${cachedVsDirect}ms`} (${cachedVsDirect !== null && cachedVsDirect > 0 ? 'MCP faster' : 'MCP not faster'})`,
     `- MCP gateway cache saved avg: ${mcpCacheSaved === null ? '-' : `${mcpCacheSaved}ms`} compared with MCP cold.`,
     '- cold 场景每轮会清 Electron bridge cache；cached 场景保留 bridge + gateway cache，模拟内部 agent 对同一学习上下文的重复工具调用。',
-    '- direct 场景代表旧的 bridge/direct 工具调用路径；internal MCP 场景代表现在内部 agent 走 MCP 工具层。',
+    '- direct 场景代表旧的 bridge/direct 两步工具调用路径；internal MCP 场景代表现在内部 agent 走 RS compound MCP 工具 `xuemate.agent.ragContext`。',
     ''
   ].join('\n')
 }
