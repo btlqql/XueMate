@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use std::env;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -14,6 +14,7 @@ pub struct Config {
     pub mdns_service_type: String,
     pub mdns_port: u16,
     pub mdns_allow_loopback: bool,
+    pub peer_ttl_ms: u64,
     pub request_timeout_ms: u64,
     pub fanout_limit: usize,
 }
@@ -21,23 +22,30 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Result<Self> {
         let port = env_u16("XUEMATE_PEEREDGE_PORT", 18888);
-        let bind_host =
+        let raw_bind_host =
             env::var("XUEMATE_PEEREDGE_BIND").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let bind_addr: SocketAddr = format!("{bind_host}:{port}")
-            .parse()
-            .map_err(|error| anyhow!("invalid XUEMATE_PEEREDGE_BIND/PORT: {error}"))?;
+        let bind_host = normalize_bind_host(&raw_bind_host);
+        let bind_ip = bind_host
+            .parse::<IpAddr>()
+            .map_err(|error| anyhow!("invalid XUEMATE_PEEREDGE_BIND: {error}"))?;
+        let bind_addr = SocketAddr::new(bind_ip, port);
+
+        let default_public_base_url = format!(
+            "http://{}",
+            public_authority(&default_public_host(&bind_host), port)
+        );
+        let public_base_url = env::var("XUEMATE_PEEREDGE_PUBLIC_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty() && value.trim().to_lowercase() != "auto")
+            .unwrap_or(default_public_base_url)
+            .trim_end_matches('/')
+            .to_string();
 
         let node_id = env::var("XUEMATE_PEEREDGE_NODE_ID")
             .unwrap_or_else(|_| format!("peeredge-{}", std::process::id()));
         let group = env::var("XUEMATE_PEEREDGE_GROUP").unwrap_or_else(|_| "class-demo".to_string());
         let bridge_url = env::var("XUEMATE_RENDERER_BRIDGE_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:8788".to_string())
-            .trim_end_matches('/')
-            .to_string();
-        let public_base_url = env::var("XUEMATE_PEEREDGE_PUBLIC_URL")
-            .ok()
-            .filter(|value| !value.trim().is_empty() && value.trim().to_lowercase() != "auto")
-            .unwrap_or_else(|| format!("http://{}:{port}", default_public_host(&bind_host)))
             .trim_end_matches('/')
             .to_string();
         let seeds = env::var("XUEMATE_PEEREDGE_SEEDS")
@@ -62,6 +70,7 @@ impl Config {
                 .unwrap_or_else(|_| "_xm-edge._tcp.local.".to_string()),
             mdns_port: env_u16("XUEMATE_PEEREDGE_MDNS_PORT", 5353),
             mdns_allow_loopback: env_bool("XUEMATE_PEEREDGE_MDNS_ALLOW_LOOPBACK", false),
+            peer_ttl_ms: env_u64("XUEMATE_PEEREDGE_PEER_TTL_MS", 120_000),
             request_timeout_ms: env_u64("XUEMATE_PEEREDGE_TIMEOUT_MS", 650),
             fanout_limit: env_usize("XUEMATE_PEEREDGE_FANOUT", 4).max(1),
         })
@@ -115,6 +124,26 @@ fn env_bool(key: &str, fallback: bool) -> bool {
             )
         })
         .unwrap_or(fallback)
+}
+
+fn normalize_bind_host(bind_host: &str) -> String {
+    let trimmed = bind_host.trim();
+    let unbracketed = trimmed
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+        .unwrap_or(trimmed);
+    if unbracketed.eq_ignore_ascii_case("localhost") {
+        "127.0.0.1".to_string()
+    } else {
+        unbracketed.to_string()
+    }
+}
+
+fn public_authority(host: &str, port: u16) -> String {
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V6(_)) => format!("[{host}]:{port}"),
+        _ => format!("{host}:{port}"),
+    }
 }
 
 fn default_public_host(bind_host: &str) -> String {

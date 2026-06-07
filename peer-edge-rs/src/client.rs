@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::sketch::{PeerEdgeSketch, QuerySketch};
 use crate::types::{
     now_ms, EvidenceCard, PeerRetrieveRequest, PeerRetrieveResponse, RendererBridgeRetrieveResponse,
 };
@@ -6,6 +7,15 @@ use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeDataResponse<T> {
+    success: bool,
+    data: Option<T>,
+    #[serde(default)]
+    error: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 pub struct PeerEdgeClient {
@@ -22,6 +32,45 @@ impl PeerEdgeClient {
         Ok(Self { http, config })
     }
 
+    pub async fn fetch_local_sketch(&self) -> Result<PeerEdgeSketch> {
+        let url = format!("{}/api/peeredge/sketch", self.config.bridge_url);
+        let response = self
+            .http
+            .get(url)
+            .send()
+            .await
+            .context("local renderer bridge sketch request failed")?;
+        decode_data_response(response, "local sketch").await
+    }
+
+    pub async fn build_query_sketch(&self, query: &str) -> Result<QuerySketch> {
+        let url = format!("{}/api/peeredge/query-sketch", self.config.bridge_url);
+        let response = self
+            .http
+            .post(url)
+            .json(&json!({ "query": query }))
+            .send()
+            .await
+            .context("local renderer bridge query-sketch request failed")?;
+        decode_data_response(response, "query sketch").await
+    }
+
+    pub async fn fetch_peer_sketch(
+        &self,
+        base_url: &str,
+        timeout_ms: u64,
+    ) -> Result<PeerEdgeSketch> {
+        let url = format!("{}/api/peeredge/sketch", base_url.trim_end_matches('/'));
+        let response = self
+            .http
+            .get(url)
+            .timeout(Duration::from_millis(timeout_ms.max(100)))
+            .send()
+            .await
+            .with_context(|| format!("peer sketch request failed: {base_url}"))?;
+        decode_data_response(response, "peer sketch").await
+    }
+
     pub async fn retrieve_local(
         &self,
         request: &PeerRetrieveRequest,
@@ -33,6 +82,10 @@ impl PeerEdgeClient {
         }
 
         let top_k = request.top_k.unwrap_or(4).clamp(1, 12);
+        let timeout_ms = request
+            .timeout_ms
+            .unwrap_or(self.config.request_timeout_ms)
+            .clamp(100, 5_000);
         let bridge_body = json!({
             "query": query,
             "topK": top_k,
@@ -46,6 +99,7 @@ impl PeerEdgeClient {
         let bridge_response = self
             .http
             .post(bridge_url)
+            .timeout(Duration::from_millis(timeout_ms))
             .json(&bridge_body)
             .send()
             .await
@@ -188,4 +242,25 @@ fn compact_snippet(input: &str, max_chars: usize) -> String {
         output.push(ch);
     }
     output
+}
+
+async fn decode_data_response<T: serde::de::DeserializeOwned>(
+    response: reqwest::Response,
+    label: &str,
+) -> Result<T> {
+    if !response.status().is_success() {
+        return Err(anyhow!("{} returned {}", label, response.status()));
+    }
+    let payload = response
+        .json::<BridgeDataResponse<T>>()
+        .await
+        .with_context(|| format!("failed to decode {label} response"))?;
+    if !payload.success {
+        return Err(anyhow!(payload
+            .error
+            .unwrap_or_else(|| format!("{label} failed"))));
+    }
+    payload
+        .data
+        .ok_or_else(|| anyhow!("{} response missing data", label))
 }

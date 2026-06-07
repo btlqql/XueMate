@@ -4,6 +4,7 @@ import * as rag from './rag'
 import { buildLearningGraph } from './learningGraph'
 import { buildSystemPrompt, getMemory, loadArchive } from './memory'
 import { quickSearch } from './quickSearch'
+import { buildQuerySketch, getLocalPeerEdgeSketch } from './peerEdgeSketch'
 import {
   bridgeCacheKey,
   clearBridgeCache,
@@ -176,6 +177,24 @@ export function startRendererBridge(port = 8788): void {
           success: true,
           data
         })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/peeredge/sketch') {
+        const data = getLocalPeerEdgeSketch(noCacheFromUrl(url))
+        sendJson(res, 200, { success: true, data })
+        return
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/peeredge/query-sketch') {
+        const body = await readJsonBody(req)
+        const query = String(body.query || '').trim()
+        if (!query) {
+          sendJson(res, 400, { success: false, error: 'query is required' })
+          return
+        }
+        const data = buildQuerySketch(query)
+        sendJson(res, 200, { success: true, data })
         return
       }
 
