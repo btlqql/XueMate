@@ -276,6 +276,50 @@ interface QuickSearchAPI {
   onBackgroundUpdate: (callback: (data: QuickSearchBackgroundUpdate) => void) => () => void
 }
 
+type LearningSignalType = 'todo' | 'weak_point' | 'material_gap'
+type LearningSignalStatus = 'suggested' | 'confirmed' | 'resolved' | 'dismissed'
+type LearningSignalSource = 'chat' | 'memory' | 'manual' | 'agent'
+
+interface LearningSignal {
+  id: string
+  conversationId: string
+  type: LearningSignalType
+  title: string
+  normalizedTitle: string
+  reason: string
+  status: LearningSignalStatus
+  source: LearningSignalSource
+  createdAt: number
+  updatedAt: number
+}
+
+interface LearningSignalDraft {
+  type: LearningSignalType
+  title: string
+  reason: string
+  source?: LearningSignalSource
+}
+
+interface LearningSignalUpdate {
+  status?: LearningSignalStatus
+  title?: string
+  reason?: string
+}
+
+interface LearningSignalsAPI {
+  list: (
+    conversationId: string
+  ) => Promise<{ success: boolean; data?: LearningSignal[]; error?: string }>
+  add: (
+    conversationId: string,
+    draft: LearningSignalDraft
+  ) => Promise<{ success: boolean; data?: LearningSignal[]; error?: string }>
+  update: (
+    id: string,
+    fields: LearningSignalUpdate
+  ) => Promise<{ success: boolean; data?: LearningSignal | null; error?: string }>
+}
+
 interface WebAssistantAPI {
   isPreview?: boolean
   start: (goal: string) => Promise<{
@@ -362,6 +406,7 @@ declare global {
     task: TaskAPI
     webAssistant?: WebAssistantAPI
     quickSearch: QuickSearchAPI
+    learningSignals: LearningSignalsAPI
   }
 }
 

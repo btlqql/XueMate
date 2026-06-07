@@ -15,6 +15,21 @@ interface ChatStreamEvent<T = unknown> {
 
 type WebAssistantUpdate = Record<string, unknown>
 type AgentUpdate = Record<string, unknown>
+type LearningSignalType = 'todo' | 'weak_point' | 'material_gap'
+type LearningSignalStatus = 'suggested' | 'confirmed' | 'resolved' | 'dismissed'
+
+interface LearningSignalDraft {
+  type: LearningSignalType
+  title: string
+  reason: string
+  source?: 'chat' | 'memory' | 'manual' | 'agent'
+}
+
+interface LearningSignalUpdate {
+  status?: LearningSignalStatus
+  title?: string
+  reason?: string
+}
 
 interface TaskDraft {
   title: string
@@ -95,6 +110,14 @@ const quickSearchAPI = {
   }
 }
 
+const learningSignalsAPI = {
+  list: (conversationId: string) => ipcRenderer.invoke('learningSignals:list', conversationId),
+  add: (conversationId: string, draft: LearningSignalDraft) =>
+    ipcRenderer.invoke('learningSignals:add', conversationId, draft),
+  update: (id: string, fields: LearningSignalUpdate) =>
+    ipcRenderer.invoke('learningSignals:update', id, fields)
+}
+
 const webAssistantAPI = {
   start: (goal: string) => ipcRenderer.invoke('webAssistant:start', goal),
   stop: (runId?: string) => ipcRenderer.invoke('webAssistant:stop', runId),
@@ -143,6 +166,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('task', taskAPI)
     contextBridge.exposeInMainWorld('webAssistant', webAssistantAPI)
     contextBridge.exposeInMainWorld('quickSearch', quickSearchAPI)
+    contextBridge.exposeInMainWorld('learningSignals', learningSignalsAPI)
   } catch (error) {
     console.error(error)
   }
@@ -157,6 +181,7 @@ if (process.contextIsolated) {
     task: typeof taskAPI
     webAssistant: typeof webAssistantAPI
     quickSearch: typeof quickSearchAPI
+    learningSignals: typeof learningSignalsAPI
   }
   globalWindow.electron = electronAPI
   globalWindow.llm = llmAPI
@@ -167,4 +192,5 @@ if (process.contextIsolated) {
   globalWindow.task = taskAPI
   globalWindow.webAssistant = webAssistantAPI
   globalWindow.quickSearch = quickSearchAPI
+  globalWindow.learningSignals = learningSignalsAPI
 }

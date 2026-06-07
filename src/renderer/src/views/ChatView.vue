@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import ChatSidebar from '../components/ChatSidebar.vue'
 import ChatMessages from '../components/ChatMessages.vue'
 import ChatInput from '../components/ChatInput.vue'
+import LearningSignalsPanel from '../components/LearningSignalsPanel.vue'
 
 const props = defineProps({
   currentRoute: { type: [String, Object], default: '' },
@@ -18,14 +19,36 @@ const streamingContent = ref('')
 const ragCollections = ref([])
 const ragCollectionId = ref('all')
 const chatDraft = ref('')
+const signalRefreshKey = ref(0)
 const emit = defineEmits(['navigate'])
 
 // 流式监听器 cleanup
 let cleanupStreamEvent = null
+let signalRefreshTimers = []
 
 function cleanupStreamListeners() {
   cleanupStreamEvent?.()
   cleanupStreamEvent = null
+}
+
+function clearSignalRefreshTimers() {
+  for (const timer of signalRefreshTimers) {
+    clearTimeout(timer)
+  }
+  signalRefreshTimers = []
+}
+
+function refreshSignalsNow() {
+  signalRefreshKey.value += 1
+}
+
+function scheduleSignalRefreshes() {
+  clearSignalRefreshTimers()
+  signalRefreshTimers = [1200, 3600, 7200, 12000, 18000].map((delay) =>
+    setTimeout(() => {
+      refreshSignalsNow()
+    }, delay)
+  )
 }
 
 const openEntry = (view) => {
@@ -90,6 +113,17 @@ const openWebSearchEntry = () => {
   })
 }
 
+const openSignalSearch = (query) => {
+  emit('navigate', {
+    view: 'agent',
+    mode: 'search',
+    payload: {
+      draftPrompt: query,
+      conversationId: activeId.value
+    }
+  })
+}
+
 // 加载会话列表
 const loadConversations = async () => {
   try {
@@ -133,6 +167,7 @@ const newConversation = async () => {
     activeId.value = result.data
     messages.value = []
     await loadConversations()
+    refreshSignalsNow()
   }
 }
 
@@ -140,6 +175,7 @@ const newConversation = async () => {
 const selectConversation = async (id) => {
   activeId.value = id
   await loadMessages(id)
+  refreshSignalsNow()
 }
 
 // 删除会话
@@ -227,6 +263,7 @@ const sendMessage = async (text) => {
         return
       }
       await loadConversations()
+      scheduleSignalRefreshes()
       return
     }
 
@@ -274,7 +311,10 @@ onMounted(() => {
   loadConversations()
   loadRagCollections()
 })
-onUnmounted(cleanupStreamListeners)
+onUnmounted(() => {
+  cleanupStreamListeners()
+  clearSignalRefreshTimers()
+})
 
 watch(() => [props.currentRoute, props.routePayload], applyRoutePayload, {
   immediate: true,
@@ -323,11 +363,19 @@ watch(() => [props.currentRoute, props.routePayload], applyRoutePayload, {
       />
       <ChatInput v-model="chatDraft" :disabled="loading" @send="sendMessage" />
     </div>
+    <LearningSignalsPanel
+      :active-id="activeId || ''"
+      :refresh-key="signalRefreshKey"
+      :loading="loading"
+      @ask="sendMessage"
+      @search="openSignalSearch"
+    />
   </div>
 </template>
 
 <style scoped>
 .chat-view {
+  position: relative;
   display: flex;
   height: 100%;
   overflow: hidden;
