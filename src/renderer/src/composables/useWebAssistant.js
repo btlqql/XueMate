@@ -108,6 +108,9 @@ export function useWebAssistant(activeMode) {
       error.value = '实时网页区域还没准备好，请切到“网页助手（高级）”页并等待页面布局稳定后再开始。'
       return
     }
+    await nextTick()
+    await syncLiveBrowserBounds()
+    await sleep(120)
 
     removeUpdateListener = window.webAssistant.onUpdate((data) => {
       if (data.runId) {

@@ -8,44 +8,16 @@ import {
   destroyWebView,
   prepareHiddenBrowserViewport,
   finishBrowserRun
-} from './web'
-import { visionJson } from './vision'
+} from './webAssistant.browser'
+import { visionJson } from '../../services/vision'
 
-export type WebAssistantState =
-  | 'idle'
-  | 'opening'
-  | 'looking'
-  | 'observing'
-  | 'thinking'
-  | 'acting'
-  | 'settling'
-  | 'cancelling'
-  | 'done'
-  | 'error'
-  | 'stopped'
-  | 'cancelled'
-  | 'timed_out'
-  | 'blocked'
-
-export interface WebAssistantStep {
-  id: number
-  thought: string
-  actionLabel: string
-  status: 'running' | 'thinking' | 'done' | 'error' | 'cancelled'
-}
-
-export interface WebAssistantDomCandidate {
-  id: string
-  role: string
-  tag: string
-  label: string
-  score: number
-  center: { x: number; y: number }
-  size: { width: number; height: number }
-  flags: string[]
-  href?: string
-  domain?: string
-}
+import type {
+  WebAssistantDomCandidate,
+  WebAssistantRunResult,
+  WebAssistantState,
+  WebAssistantStep,
+  WebAssistantUpdate
+} from './webAssistant.domain'
 
 interface ElementCandidate {
   element: InteractiveElement
@@ -57,24 +29,6 @@ interface VisionActionResult {
   action?: unknown
 }
 
-export interface WebAssistantUpdate {
-  state: WebAssistantState
-  terminal?: boolean
-  step: number
-  maxSteps: number
-  steps: WebAssistantStep[]
-  screenshot?: string
-  screenshotMime?: string
-  url?: string
-  title?: string
-  thought?: string
-  action?: BrowserAction
-  answer?: string
-  error?: string
-  domElementCount?: number
-  domCandidates?: WebAssistantDomCandidate[]
-}
-
 const MAX_STEPS = 15
 const DEFAULT_START_URL = 'https://www.bing.com'
 
@@ -82,7 +36,7 @@ export async function runWebAssistant(
   goal: string,
   onUpdate: (data: WebAssistantUpdate) => void,
   shouldStop: () => boolean
-): Promise<{ success: boolean; answer?: string; steps: WebAssistantStep[]; error?: string }> {
+): Promise<WebAssistantRunResult> {
   const steps: WebAssistantStep[] = []
   let state: WebAssistantState = 'opening'
   let latestScreenshot = ''

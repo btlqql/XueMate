@@ -18,16 +18,8 @@ import {
   PRO_MODEL
 } from './services/llm'
 import { runAgent } from './services/agent'
-import { runWebAssistant, type WebAssistantUpdate } from './services/computerUse'
 import { quickSearch } from './services/quickSearch'
-import {
-  destroyWebView,
-  setHostWindow,
-  showBrowserAtHeight,
-  hideBrowser,
-  setLiveBrowserBounds,
-  stopActiveBrowserLoading
-} from './services/web'
+import { destroyWebView, setHostWindow, showBrowserAtHeight, hideBrowser } from './services/web'
 import * as chatStore from './services/chatStore'
 import {
   getMemory,
@@ -42,6 +34,7 @@ import { startRendererBridge, stopRendererBridge } from './services/rendererBrid
 import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdgeRuntime'
 import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge'
 import { registerLearningSignalIpc } from './modules/learningSignals/learningSignal.ipc'
+import { registerWebAssistantIpc } from './modules/webAssistant/webAssistant.ipc'
 import { extractAndSaveLearningSignals } from './modules/learningSignals/learningSignalExtractor.agent'
 import * as taskStore from './services/taskStore'
 import * as quickSearchStore from './services/quickSearchStore'
@@ -51,13 +44,6 @@ import type { QuickSearchFilters } from './domain/quickSearch'
 
 // 启动时自动迁移旧数据
 let agentRunning = false
-let webAssistantRun: {
-  id: string
-  win: BrowserWindow | null
-  stopRequested: boolean
-  seq: number
-} | null = null
-
 let confirmResolve: ((approved: boolean) => void) | null = null
 
 type ChatStreamEventType = 'token' | 'done' | 'error'
@@ -77,10 +63,6 @@ function createChatRequestId(): string {
 
 function createQuickSearchRunId(): string {
   return `qsrun_${Date.now()}_${randomUUID()}`
-}
-
-function createWebAssistantRunId(): string {
-  return `warun_${Date.now()}_${randomUUID()}`
 }
 
 function sendChatStreamEvent<T>(
@@ -348,82 +330,6 @@ function registerLLMHandlers(): void {
 
   ipcMain.handle('agent:hideBrowser', async () => {
     hideBrowser()
-    return { success: true }
-  })
-
-  // 网页小助手：普通多模态模型看截图，然后控制内置浏览器
-  ipcMain.handle('webAssistant:start', async (event, goal: string) => {
-    if (webAssistantRun) {
-      return {
-        success: false,
-        error: webAssistantRun.stopRequested
-          ? '网页小助手正在停止，请等它完全结束后再开始'
-          : '网页小助手正在执行',
-        runId: webAssistantRun.id
-      }
-    }
-
-    const runId = createWebAssistantRunId()
-    const win = BrowserWindow.fromWebContents(event.sender)
-    webAssistantRun = {
-      id: runId,
-      win,
-      stopRequested: false,
-      seq: 0
-    }
-
-    const sendRunUpdate = (data: WebAssistantUpdate) => {
-      const run = webAssistantRun
-      if (!run || run.id !== runId) return
-      run.seq += 1
-      if (win && !win.isDestroyed()) {
-        try {
-          win.webContents.send('webAssistant:update', {
-            ...data,
-            runId,
-            seq: run.seq
-          })
-        } catch (error) {
-          console.warn('[WebAssistant] update 发送失败:', getErrorMessage(error))
-        }
-      }
-    }
-
-    try {
-      const result = await runWebAssistant(goal, sendRunUpdate, () => {
-        return !webAssistantRun || webAssistantRun.id !== runId || webAssistantRun.stopRequested
-      })
-      return { ...result, runId }
-    } finally {
-      if (webAssistantRun?.id === runId) {
-        webAssistantRun = null
-      }
-    }
-  })
-
-  ipcMain.handle('webAssistant:stop', async (_event, runId?: string) => {
-    if (!webAssistantRun) return { success: true }
-    if (runId && webAssistantRun.id !== runId) {
-      return { success: true, ignored: true }
-    }
-
-    webAssistantRun.stopRequested = true
-    stopActiveBrowserLoading()
-    webAssistantRun.seq += 1
-    if (webAssistantRun.win && !webAssistantRun.win.isDestroyed()) {
-      webAssistantRun.win.webContents.send('webAssistant:update', {
-        runId: webAssistantRun.id,
-        seq: webAssistantRun.seq,
-        state: 'cancelling',
-        terminal: false,
-        error: ''
-      })
-    }
-    return { success: true }
-  })
-
-  ipcMain.handle('webAssistant:setLiveBounds', async (_event, bounds) => {
-    setLiveBrowserBounds(bounds || null)
     return { success: true }
   })
 
@@ -863,6 +769,7 @@ app.whenReady().then(() => {
 
   registerLLMHandlers()
   registerLearningSignalIpc(ipcMain)
+  registerWebAssistantIpc(ipcMain)
   startRendererBridge(Number(process.env.XUEMATE_RENDERER_BRIDGE_PORT || 8788))
   const peerEdgeStatus = startPeerEdgeRuntime()
   if (peerEdgeStatus.running) {
