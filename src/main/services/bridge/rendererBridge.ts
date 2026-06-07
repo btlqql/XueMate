@@ -1,10 +1,10 @@
 import http from 'http'
 import type { Server } from 'http'
-import * as rag from './rag'
-import { buildLearningGraph } from './learningGraph'
-import { buildSystemPrompt, getMemory, loadArchive } from './memory'
-import { quickSearch } from './quickSearch'
-import { buildQuerySketch, getLocalPeerEdgeSketch } from './peerEdgeSketch'
+import * as rag from '../rag/rag'
+import { buildLearningGraph } from '../rag/learningGraph'
+import { buildSystemPrompt, getMemory, loadArchive } from '../memory/memory'
+import { quickSearch } from '../quickSearch/quickSearch'
+import { buildQuerySketch, getLocalPeerEdgeSketch } from '../peerEdge/peerEdgeSketch'
 import {
   bridgeCacheKey,
   clearBridgeCache,

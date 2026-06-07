@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { ArchiveModule } from '../domain/memory'
+import type { ArchiveModule } from '../../domain/memory'
 
 const DATA_DIR = join(process.env.HOME || '/tmp', '.xuemate')
 const ARCHIVE_DIR = join(DATA_DIR, 'archives')

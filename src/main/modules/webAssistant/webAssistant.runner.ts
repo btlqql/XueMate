@@ -9,7 +9,7 @@ import {
   prepareHiddenBrowserViewport,
   finishBrowserRun
 } from './webAssistant.browser'
-import { visionJson } from '../../services/vision'
+import { visionJson } from '../../services/ai/vision'
 
 import type {
   WebAssistantDomCandidate,

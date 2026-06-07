@@ -1,5 +1,5 @@
-import { chat } from './llm'
-import type { UserMemory } from '../domain/memory'
+import { chat } from '../ai/llm'
+import type { UserMemory } from '../../domain/memory'
 import {
   addListMemories,
   clamp01,
@@ -96,13 +96,18 @@ ${conversationText}
       if (parsed.weakPoints?.length) {
         updated.history = {
           ...updated.history,
-          weakPoints: uniqueStrings([...updated.history.weakPoints, ...parsed.weakPoints]).slice(-40)
+          weakPoints: uniqueStrings([...updated.history.weakPoints, ...parsed.weakPoints]).slice(
+            -40
+          )
         }
       }
       if (parsed.strongPoints?.length) {
         updated.history = {
           ...updated.history,
-          strongPoints: uniqueStrings([...updated.history.strongPoints, ...parsed.strongPoints]).slice(-40)
+          strongPoints: uniqueStrings([
+            ...updated.history.strongPoints,
+            ...parsed.strongPoints
+          ]).slice(-40)
         }
       }
 
@@ -141,7 +146,10 @@ ${conversationText}
 }
 
 function normalizeExtractedLanguage(value: unknown): string {
-  const label = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 24)
+  const label = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24)
   if (!label) return ''
   if (/^(zh|cn|中文|汉语|普通话)$/i.test(label)) return 'zh'
   if (/^(en|eng|english|英文|英语)$/i.test(label)) return 'en'

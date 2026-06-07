@@ -1,10 +1,10 @@
 import { randomUUID } from 'crypto'
-import type { Task, TaskEditableFields } from '../domain/task'
-import type { InsertTaskRow, UpdateTaskFieldsRow } from '../dao/taskDao'
-import * as taskDao from '../dao/taskDao'
-import { rowToTask } from '../mappers/taskMapper'
+import type { Task, TaskEditableFields } from '../../domain/task'
+import type { InsertTaskRow, UpdateTaskFieldsRow } from '../../dao/taskDao'
+import * as taskDao from '../../dao/taskDao'
+import { rowToTask } from '../../mappers/taskMapper'
 
-export type { Task } from '../domain/task'
+export type { Task } from '../../domain/task'
 
 export function getTasks(): Task[] {
   return taskDao.findAll().map(rowToTask)

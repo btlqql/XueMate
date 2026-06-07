@@ -1,18 +1,18 @@
-import { getMemory, type MemoryAtom } from './memory'
-import { ALL_COLLECTIONS_ID, RAG_OFF_ID } from '../domain/rag'
+import { getMemory, type MemoryAtom } from '../memory/memory'
+import { ALL_COLLECTIONS_ID, RAG_OFF_ID } from '../../domain/rag'
 import type {
   LearningGraphData,
   LearningGraphEdge,
   LearningGraphEdgeType,
   LearningGraphNode,
   LearningGraphNodeType
-} from '../domain/learningGraph'
-import * as learningGraphDao from '../dao/learningGraphDao'
+} from '../../domain/learningGraph'
+import * as learningGraphDao from '../../dao/learningGraphDao'
 import type {
   LearningGraphChunkRow,
   LearningGraphCollectionRow,
   LearningGraphDocumentRow
-} from '../dao/learningGraphDao'
+} from '../../dao/learningGraphDao'
 
 export type {
   LearningGraphData,
@@ -20,7 +20,7 @@ export type {
   LearningGraphEdgeType,
   LearningGraphNode,
   LearningGraphNodeType
-} from '../domain/learningGraph'
+} from '../../domain/learningGraph'
 
 interface ConceptRule {
   id: string
@@ -254,9 +254,14 @@ function isGoodChineseTerm(term: string): boolean {
   const label = normalizeConceptLabel(term)
   if (label.length < 2 || label.length > 12) return false
   if (chineseStopWords.has(label)) return false
-  if ([...chineseStopWords].some((stop) => label === stop || label.startsWith(stop + '的'))) return false
+  if ([...chineseStopWords].some((stop) => label === stop || label.startsWith(stop + '的')))
+    return false
   if (/(目录|展示|视觉|增强版|重制版)/.test(label)) return false
-  if (/^(原|现|好|启|定|页|模|状|结|输|刷|打|关|点|查|生|整|关|自|默|当|全)/.test(label) && label.length <= 3) return false
+  if (
+    /^(原|现|好|启|定|页|模|状|结|输|刷|打|关|点|查|生|整|关|自|默|当|全)/.test(label) &&
+    label.length <= 3
+  )
+    return false
   return /[\u4e00-\u9fff]/.test(label)
 }
 
@@ -350,7 +355,12 @@ function addChineseNgrams(
 
   for (const [term, count] of [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 18)) {
     if (count < 2 && term.length <= 3) continue
-    addCandidate(candidates, term, Math.min(3.2, 0.7 + count * 0.45 + term.length * 0.08), 'content')
+    addCandidate(
+      candidates,
+      term,
+      Math.min(3.2, 0.7 + count * 0.45 + term.length * 0.08),
+      'content'
+    )
   }
 }
 
@@ -368,7 +378,10 @@ function subjectFromContext(options: ConceptExtractOptions, label: string): stri
 }
 
 function extractConcepts(text: string, options: ConceptExtractOptions = {}): ConceptRule[] {
-  const candidates = new Map<string, { label: string; score: number; source: ConceptRule['source'] }>()
+  const candidates = new Map<
+    string,
+    { label: string; score: number; source: ConceptRule['source'] }
+  >()
   const fullText = `${options.fileName || ''}\n${text || ''}`.slice(0, 12000)
 
   if (options.fileName) addTitleTerms(candidates, stripExt(options.fileName), 0.75)
@@ -405,7 +418,10 @@ function dynamicConceptFromFile(fileName: string, collectionName?: string): Conc
   }
 }
 
-function findBestConceptForMemory(atom: MemoryAtom, conceptById: Map<string, ConceptRule>): ConceptRule {
+function findBestConceptForMemory(
+  atom: MemoryAtom,
+  conceptById: Map<string, ConceptRule>
+): ConceptRule {
   const text = `${atom.key} ${atom.value} ${(atom.evidence || []).join(' ')}`
   const normalizedText = text.toLowerCase()
   for (const concept of conceptById.values()) {
@@ -600,7 +616,9 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
 
   for (const [docId, weights] of docConceptWeight.entries()) {
     const docNodeId = nodeId('document', docId)
-    for (const [conceptId, weight] of [...weights.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
+    for (const [conceptId, weight] of [...weights.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)) {
       if (!topConceptSet.has(conceptId)) continue
       addEdge(docNodeId, conceptId, 'mentions', '提到知识点', clamp(weight, 1, 8))
     }
@@ -609,7 +627,9 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
   const chunkCandidates = chunks
     .map((chunk) => ({
       chunk,
-      concepts: (chunkConcepts.get(chunk.id) || []).filter((concept) => topConceptSet.has(concept.id))
+      concepts: (chunkConcepts.get(chunk.id) || []).filter((concept) =>
+        topConceptSet.has(concept.id)
+      )
     }))
     .filter((item) => item.concepts.length > 0)
     .sort((a, b) => b.concepts.length - a.concepts.length || a.chunk.start_pos - b.chunk.start_pos)
@@ -649,7 +669,8 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
     )
     .sort(
       (a, b) =>
-        b.importance * b.confidence + Math.min(b.hits, 8) * 0.03 -
+        b.importance * b.confidence +
+        Math.min(b.hits, 8) * 0.03 -
         (a.importance * a.confidence + Math.min(a.hits, 8) * 0.03)
     )
     .slice(0, MAX_MEMORY_NODES)
@@ -663,7 +684,13 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
         type: 'concept',
         size: 9,
         score: 0.35,
-        meta: { subject: concept.subject, mentions: 0, source: concept.source, confidence: concept.confidence, dynamic: true }
+        meta: {
+          subject: concept.subject,
+          mentions: 0,
+          source: concept.source,
+          confidence: concept.confidence,
+          dynamic: true
+        }
       })
     }
 
@@ -720,7 +747,12 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
         type: 'concept',
         size: 9,
         score: 0.35,
-        meta: { subject: concept.subject, source: concept.source, confidence: concept.confidence, dynamic: true }
+        meta: {
+          subject: concept.subject,
+          source: concept.source,
+          confidence: concept.confidence,
+          dynamic: true
+        }
       })
     }
     const id = nodeId('review', review.key)
@@ -741,7 +773,8 @@ export function buildLearningGraph(collectionId?: string): LearningGraphData {
 
   const resultNodes = [...nodes.values()]
   const resultEdges = [...edges.values()]
-  const possibleEdges = resultNodes.length > 1 ? (resultNodes.length * (resultNodes.length - 1)) / 2 : 1
+  const possibleEdges =
+    resultNodes.length > 1 ? (resultNodes.length * (resultNodes.length - 1)) / 2 : 1
   const weakPointCount = resultNodes.filter(
     (node) =>
       node.type === 'memory' &&

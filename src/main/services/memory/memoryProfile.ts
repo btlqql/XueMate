@@ -1,10 +1,6 @@
 import { randomUUID } from 'crypto'
-import type { MemoryAtom, MemoryCategory, UserMemory } from '../domain/memory'
-import {
-  ACTIVE_CONFIDENCE_THRESHOLD,
-  MAX_ATOMS,
-  MAX_EVIDENCE_PER_ATOM
-} from '../domain/memory'
+import type { MemoryAtom, MemoryCategory, UserMemory } from '../../domain/memory'
+import { ACTIVE_CONFIDENCE_THRESHOLD, MAX_ATOMS, MAX_EVIDENCE_PER_ATOM } from '../../domain/memory'
 
 export function uniqueStrings(items: string[]): string[] {
   return [...new Set((items || []).map((item) => String(item || '').trim()).filter(Boolean))]
@@ -52,9 +48,7 @@ export function normalizeAtoms(atoms: MemoryAtom[]): MemoryAtom[] {
     })
   }
 
-  return normalized
-    .sort((a, b) => memoryPriority(b) - memoryPriority(a))
-    .slice(0, MAX_ATOMS)
+  return normalized.sort((a, b) => memoryPriority(b) - memoryPriority(a)).slice(0, MAX_ATOMS)
 }
 
 function hashString(value: string): number {
@@ -182,10 +176,10 @@ export function refreshMemoryDerivedState(memory: UserMemory): void {
       evidenceCount: atom.hits,
       lastPracticed: atom.lastSeen
     })),
-    goals: uniqueStrings([...memory.profile.learningGoals, ...goalAtoms.map((atom) => atom.value)]).slice(
-      0,
-      10
-    ),
+    goals: uniqueStrings([
+      ...memory.profile.learningGoals,
+      ...goalAtoms.map((atom) => atom.value)
+    ]).slice(0, 10),
     reviewQueue: weakAtoms.slice(0, 8).map((atom) => ({
       key: atom.value,
       reason: atom.category === 'misconception' ? '疑似误区，需要纠正' : '薄弱点需要复习',
@@ -199,7 +193,9 @@ export function refreshMemoryDerivedState(memory: UserMemory): void {
     activeAtomCount: active.length,
     avgConfidence:
       active.length > 0
-        ? Number((active.reduce((sum, atom) => sum + atom.confidence, 0) / active.length).toFixed(3))
+        ? Number(
+            (active.reduce((sum, atom) => sum + atom.confidence, 0) / active.length).toFixed(3)
+          )
         : 0,
     weakPointCount: weakAtoms.length,
     strongPointCount: strongAtoms.length,

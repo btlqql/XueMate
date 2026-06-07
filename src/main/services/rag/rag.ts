@@ -1,15 +1,15 @@
 import { randomUUID } from 'crypto'
-import * as ragDao from '../dao/ragDao'
-import type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../domain/rag'
-import { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../domain/rag'
-import { rowToChunk, rowToCollection, rowToDocument } from '../mappers/ragMapper'
-import { clearBridgeCache } from './bridgeCache'
+import * as ragDao from '../../dao/ragDao'
+import type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../../domain/rag'
+import { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../../domain/rag'
+import { rowToChunk, rowToCollection, rowToDocument } from '../../mappers/ragMapper'
+import { clearBridgeCache } from '../bridge/bridgeCache'
 import { getCachedQueryEmbedding } from './ragQueryCache'
 import { getVectorIndex, invalidateVectorIndex } from './ragVectorIndex'
 import { dotProduct, float32ToEmbeddingBlob, normalizeVector } from './vectorMath'
 
-export type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../domain/rag'
-export { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../domain/rag'
+export type { Chunk, Collection, Document, RetrieveOptions, RetrieveResult } from '../../domain/rag'
+export { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID, RAG_OFF_ID } from '../../domain/rag'
 
 // ── 配置 ──
 

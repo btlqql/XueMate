@@ -13,4 +13,4 @@ export {
   type BrowserState,
   type InteractiveElement,
   type LiveBrowserBounds
-} from '../../services/web'
+} from '../../services/browser/webRuntime'

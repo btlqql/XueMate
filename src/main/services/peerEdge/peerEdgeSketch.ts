@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import * as ragDao from '../dao/ragDao'
+import * as ragDao from '../../dao/ragDao'
 
 export const PEEREDGE_SKETCH_VERSION = 'peeredge-sketch-v1' as const
 
@@ -102,7 +102,12 @@ let cachedSketch: CachedSketch | null = null
 export function getLocalPeerEdgeSketch(noCache = false): PeerEdgeSketch {
   const fingerprint = localRagFingerprint()
   const now = Date.now()
-  if (!noCache && cachedSketch && cachedSketch.expiresAt > now && cachedSketch.fingerprint === fingerprint) {
+  if (
+    !noCache &&
+    cachedSketch &&
+    cachedSketch.expiresAt > now &&
+    cachedSketch.fingerprint === fingerprint
+  ) {
     return cachedSketch.value
   }
 
@@ -191,7 +196,9 @@ function buildSketchFromBuckets<T extends PeerEdgeSketch | PeerEdgeQuerySketch>(
 function localRagFingerprint(): string {
   const docs = ragDao.findDocuments().slice(0, 80)
   const stats = `${ragDao.countDocuments()}:${ragDao.sumDocumentChunks()}`
-  const recent = docs.map((doc) => `${doc.id}:${doc.file_name}:${doc.chunk_count}:${doc.created_at}`).join('|')
+  const recent = docs
+    .map((doc) => `${doc.id}:${doc.file_name}:${doc.chunk_count}:${doc.created_at}`)
+    .join('|')
   return createHash('sha256').update(`${stats}|${recent}`).digest('hex').slice(0, 16)
 }
 

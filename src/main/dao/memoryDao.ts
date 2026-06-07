@@ -1,4 +1,4 @@
-import db from '../services/db'
+import db from '../services/infrastructure/db'
 
 const stmtGet = db.prepare('SELECT data FROM memory WHERE id = 1')
 const stmtSave = db.prepare('INSERT OR REPLACE INTO memory (id, data, updated_at) VALUES (1, ?, ?)')

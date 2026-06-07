@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import './services/consolePipeGuard'
+import './services/app/consolePipeGuard'
 import { app, shell, BrowserWindow, ipcMain, dialog, Notification } from 'electron'
 import { randomUUID } from 'crypto'
 import { join, basename } from 'path'
@@ -16,29 +16,34 @@ import {
   chatStream,
   MODEL,
   PRO_MODEL
-} from './services/llm'
-import { runAgent } from './services/agent'
-import { quickSearch } from './services/quickSearch'
-import { destroyWebView, setHostWindow, showBrowserAtHeight, hideBrowser } from './services/web'
-import * as chatStore from './services/chatStore'
+} from './services/ai/llm'
+import { runAgent } from './services/agent/agent'
+import { quickSearch } from './services/quickSearch/quickSearch'
+import {
+  destroyWebView,
+  setHostWindow,
+  showBrowserAtHeight,
+  hideBrowser
+} from './services/browser/webRuntime'
+import * as chatStore from './services/chat/chatStore'
 import {
   getMemory,
   saveMemory,
   buildSystemPrompt,
   extractMemory,
   compressMemoryIfNeeded
-} from './services/memory'
-import * as rag from './services/rag'
-import { buildLearningGraph } from './services/learningGraph'
-import { startRendererBridge, stopRendererBridge } from './services/rendererBridge'
-import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdgeRuntime'
-import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge'
+} from './services/memory/memory'
+import * as rag from './services/rag/rag'
+import { buildLearningGraph } from './services/rag/learningGraph'
+import { startRendererBridge, stopRendererBridge } from './services/bridge/rendererBridge'
+import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdge/peerEdgeRuntime'
+import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge/peerEdge'
 import { registerLearningSignalIpc } from './modules/learningSignals/learningSignal.ipc'
 import { registerWebAssistantIpc } from './modules/webAssistant/webAssistant.ipc'
 import { extractAndSaveLearningSignals } from './modules/learningSignals/learningSignalExtractor.agent'
-import * as taskStore from './services/taskStore'
-import * as quickSearchStore from './services/quickSearchStore'
-import { ensureEnoughText, extractTextFromFile } from './services/document'
+import * as taskStore from './services/task/taskStore'
+import * as quickSearchStore from './services/quickSearch/quickSearchStore'
+import { ensureEnoughText, extractTextFromFile } from './services/document/document'
 import type { NewTask, TaskEditableFields } from './domain/task'
 import type { QuickSearchFilters } from './domain/quickSearch'
 

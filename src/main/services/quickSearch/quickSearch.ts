@@ -1,5 +1,5 @@
-import { checkSearchSafety, summarizeResults } from './agent'
-import { searchAndFetch } from './web'
+import { checkSearchSafety, summarizeResults } from '../agent/agent'
+import { searchAndFetch } from '../browser/webRuntime'
 
 export interface QuickSearchSourceScore {
   relevance: number

@@ -1,4 +1,4 @@
-import db from '../services/db'
+import db from '../services/infrastructure/db'
 
 export interface CollectionRow {
   id: string
@@ -190,7 +190,9 @@ export function findChunkEmbeddingsByCollection(collectionId: string): ChunkEmbe
 export function findChunksByIds(ids: string[]): ChunkRow[] {
   if (ids.length === 0) return []
   const placeholders = ids.map(() => '?').join(',')
-  const rows = db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`).all(...ids) as ChunkRow[]
+  const rows = db
+    .prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`)
+    .all(...ids) as ChunkRow[]
   const rank = new Map(ids.map((id, index) => [id, index]))
   return rows.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
 }
@@ -198,7 +200,9 @@ export function findChunksByIds(ids: string[]): ChunkRow[] {
 export function findRecentChunks(collectionId: string | undefined, limit: number): ChunkRow[] {
   if (collectionId) {
     return db
-      .prepare('SELECT * FROM chunks WHERE collection_id = ? ORDER BY created_at DESC, start_pos ASC LIMIT ?')
+      .prepare(
+        'SELECT * FROM chunks WHERE collection_id = ? ORDER BY created_at DESC, start_pos ASC LIMIT ?'
+      )
       .all(collectionId, limit) as ChunkRow[]
   }
   return db
@@ -211,7 +215,10 @@ export function findChunksByKeywordTerms(
   collectionId: string | undefined,
   limit: number
 ): ChunkRow[] {
-  const normalizedTerms = terms.map((term) => term.trim()).filter(Boolean).slice(0, 8)
+  const normalizedTerms = terms
+    .map((term) => term.trim())
+    .filter(Boolean)
+    .slice(0, 8)
   if (normalizedTerms.length === 0) return findRecentChunks(collectionId, limit)
 
   const clauses = normalizedTerms.map(() => '(content LIKE ? OR file_name LIKE ?)').join(' OR ')
@@ -226,7 +233,9 @@ export function findChunksByKeywordTerms(
   }
 
   return db
-    .prepare(`SELECT * FROM chunks WHERE ${clauses} ORDER BY created_at DESC, start_pos ASC LIMIT ?`)
+    .prepare(
+      `SELECT * FROM chunks WHERE ${clauses} ORDER BY created_at DESC, start_pos ASC LIMIT ?`
+    )
     .all(...params, limit) as ChunkRow[]
 }
 
@@ -253,15 +262,15 @@ export function deleteChunksByDocumentId(documentId: string): number {
 }
 
 export function countDocuments(collectionId?: string): number {
-  const row = (collectionId
-    ? stmts.countDocsByCollection.get(collectionId)
-    : stmts.countDocs.get()) as { cnt: number }
+  const row = (
+    collectionId ? stmts.countDocsByCollection.get(collectionId) : stmts.countDocs.get()
+  ) as { cnt: number }
   return row.cnt
 }
 
 export function sumDocumentChunks(collectionId?: string): number {
-  const row = (collectionId
-    ? stmts.sumChunksByCollection.get(collectionId)
-    : stmts.sumChunks.get()) as { total: number }
+  const row = (
+    collectionId ? stmts.sumChunksByCollection.get(collectionId) : stmts.sumChunks.get()
+  ) as { total: number }
   return row.total
 }
