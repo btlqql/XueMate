@@ -38,6 +38,12 @@ import { buildLearningGraph } from './services/rag/learningGraph'
 import { startRendererBridge, stopRendererBridge } from './services/bridge/rendererBridge'
 import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdge/peerEdgeRuntime'
 import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge/peerEdge'
+import { getInternalRagStats, retrieveInternalRag } from './services/mcp/internalLearningTools'
+import {
+  getInternalMcpStatus,
+  stopInternalMcpClient,
+  warmInternalMcpClient
+} from './services/mcp/internalMcpClient'
 import { registerLearningSignalIpc } from './modules/learningSignals/learningSignal.ipc'
 import { registerWebAssistantIpc } from './modules/webAssistant/webAssistant.ipc'
 import { extractAndSaveLearningSignals } from './modules/learningSignals/learningSignalExtractor.agent'
@@ -126,6 +132,10 @@ function peerEdgeChatFanout(): number {
   const parsed = Number(process.env.XUEMATE_PEEREDGE_CHAT_FANOUT)
   if (!Number.isFinite(parsed)) return 4
   return Math.max(1, Math.min(parsed, 8))
+}
+
+function internalMcpAgentEnabled(): boolean {
+  return process.env.XUEMATE_INTERNAL_MCP !== 'off'
 }
 
 function createWindow(): void {
@@ -454,27 +464,68 @@ function registerLLMHandlers(): void {
         let localRagCount = 0
         let localRagTopScore = 0
         const ragCollectionId = options?.collectionId || rag.ALL_COLLECTIONS_ID
-        const stats =
-          ragCollectionId === rag.RAG_OFF_ID
-            ? { docCount: 0, chunkCount: 0 }
-            : rag.getStats(ragCollectionId)
+        let stats = { docCount: 0, chunkCount: 0 }
+        if (ragCollectionId !== rag.RAG_OFF_ID) {
+          if (internalMcpAgentEnabled()) {
+            try {
+              stats = await getInternalRagStats(ragCollectionId)
+            } catch (error) {
+              console.warn('[InternalMCP] RAG stats fallback direct:', getErrorMessage(error))
+              stats = rag.getStats(ragCollectionId)
+            }
+          } else {
+            stats = rag.getStats(ragCollectionId)
+          }
+        }
         if (stats.chunkCount > 0) {
           try {
-            const results = await rag.retrieve(content, {
-              topK: 4,
-              candidateK: 48,
-              minScore: 0.16,
-              collectionId: ragCollectionId
-            })
-            localRagCount = results.length
-            localRagTopScore = results[0]?.score || 0
-            if (results.length > 0 && results[0].score > 0.24) {
-              ragContext = rag.buildRagContext(results, {
+            if (internalMcpAgentEnabled()) {
+              const mcpResult = await retrieveInternalRag(content, {
+                topK: 4,
+                candidateK: 48,
+                minScore: 0.16,
+                collectionId: ragCollectionId,
                 title: '以下是用户课程资料中的相关内容'
               })
+              localRagCount = mcpResult.results.length
+              localRagTopScore = mcpResult.results[0]?.score || 0
+              if (mcpResult.results.length > 0 && localRagTopScore > 0.24) {
+                ragContext = mcpResult.context
+              }
+            } else {
+              const results = await rag.retrieve(content, {
+                topK: 4,
+                candidateK: 48,
+                minScore: 0.16,
+                collectionId: ragCollectionId
+              })
+              localRagCount = results.length
+              localRagTopScore = results[0]?.score || 0
+              if (results.length > 0 && results[0].score > 0.24) {
+                ragContext = rag.buildRagContext(results, {
+                  title: '以下是用户课程资料中的相关内容'
+                })
+              }
             }
           } catch (e) {
-            console.error('[RAG] 检索失败:', e)
+            console.warn('[InternalMCP] RAG retrieve fallback direct:', getErrorMessage(e))
+            try {
+              const results = await rag.retrieve(content, {
+                topK: 4,
+                candidateK: 48,
+                minScore: 0.16,
+                collectionId: ragCollectionId
+              })
+              localRagCount = results.length
+              localRagTopScore = results[0]?.score || 0
+              if (results.length > 0 && results[0].score > 0.24) {
+                ragContext = rag.buildRagContext(results, {
+                  title: '以下是用户课程资料中的相关内容'
+                })
+              }
+            } catch (error) {
+              console.error('[RAG] 检索失败:', error)
+            }
           }
         }
 
@@ -776,6 +827,16 @@ app.whenReady().then(() => {
   registerLearningSignalIpc(ipcMain)
   registerWebAssistantIpc(ipcMain)
   startRendererBridge(Number(process.env.XUEMATE_RENDERER_BRIDGE_PORT || 8788))
+  warmInternalMcpClient()
+    .then(() => {
+      const status = getInternalMcpStatus()
+      if (status.running) {
+        console.log(`[InternalMCP] internal agent tools ready: ${status.binaryPath}`)
+      }
+    })
+    .catch((error) => {
+      console.warn('[InternalMCP] inactive, agent will fallback direct:', getErrorMessage(error))
+    })
   const peerEdgeStatus = startPeerEdgeRuntime()
   if (peerEdgeStatus.running) {
     console.log(
@@ -832,11 +893,13 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  stopInternalMcpClient()
   stopPeerEdgeRuntime()
 })
 
 app.on('window-all-closed', () => {
   destroyWebView()
+  stopInternalMcpClient()
   stopPeerEdgeRuntime()
   stopRendererBridge()
   if (process.platform !== 'darwin') {
