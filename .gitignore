@@ -2,6 +2,7 @@ node_modules
 dist
 out
 .DS_Store
+**/.DS_Store
 .eslintcache
 *.log*
 .env
@@ -9,3 +10,16 @@ out
 .env.*.local
 mcp-gateway-rs/target/
 peer-edge-rs/target/
+
+# Local scratch / assistant workspace
+.tmp/
+.claude/
+design-duolingo/
+.vs/
+
+# Generic generated output
+.cache/
+.vite/
+coverage/
+*.pid
+*.tmp
