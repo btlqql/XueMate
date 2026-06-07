@@ -1,5 +1,6 @@
 import * as rag from '../rag/rag'
-import { getInternalRagStats, retrieveInternalRag } from '../mcp/internalLearningTools'
+import type { RetrieveResult } from '../../domain/rag'
+import { callAgentToolViaRs } from './agentToolMapper'
 
 export interface AgentRagContextOptions {
   collectionId: string
@@ -16,6 +17,18 @@ export interface AgentRagContextResult {
   localCount: number
   localTopScore: number
   source: 'mcp' | 'direct' | 'off' | 'empty'
+}
+
+interface AgentRagStats {
+  docCount: number
+  chunkCount: number
+}
+
+interface AgentRagRetrieveResult {
+  query: string
+  count: number
+  results: RetrieveResult[]
+  context: string
 }
 
 function internalMcpAgentEnabled(): boolean {
@@ -35,17 +48,24 @@ async function retrieveViaMcp(
   query: string,
   options: AgentRagContextOptions
 ): Promise<AgentRagContextResult> {
-  const stats = await getInternalRagStats(options.collectionId)
+  const statsResult = await callAgentToolViaRs<AgentRagStats>('rag.stats', {
+    collectionId: options.collectionId
+  })
+  const stats = statsResult.data
   if (stats.chunkCount <= 0) return emptyRagContext('empty')
 
-  const mcpResult = await retrieveInternalRag(query, {
+  const retrieveResult = await callAgentToolViaRs<AgentRagRetrieveResult>('rag.retrieve', {
+    query,
     collectionId: options.collectionId,
     topK: options.topK,
     candidateK: options.candidateK,
     minScore: options.minScore,
-    title: options.title,
-    maxChars: options.maxChars
+    useMmr: true,
+    includeContext: true,
+    maxChars: options.maxChars || 3600,
+    title: options.title
   })
+  const mcpResult = retrieveResult.data
   const localTopScore = mcpResult.results[0]?.score || 0
   return {
     context:
