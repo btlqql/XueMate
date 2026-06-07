@@ -35,8 +35,8 @@ const navItems = [
 const secondaryItems = [
   {
     id: 'tools',
-    label: '学习工具',
-    target: { view: 'tools' }
+    label: '代码作业辅导',
+    target: { view: 'tools', tool: 'tutor' }
   },
   {
     id: 'agent',

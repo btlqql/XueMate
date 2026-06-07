@@ -6,10 +6,6 @@ const props = defineProps({
   searching: Boolean,
   searchError: { type: String, default: '' },
   searchResult: { type: Object, default: null },
-  backgroundOrganizing: Boolean,
-  backgroundMessage: { type: String, default: '' },
-  backgroundError: { type: String, default: '' },
-  backgroundResult: { type: Object, default: null },
   quickSearchHistory: { type: Array, default: () => [] },
   quickSearchHistoryLoading: Boolean,
   searchSamples: { type: Array, default: () => [] },
@@ -20,19 +16,16 @@ const props = defineProps({
 const emit = defineEmits(['update:searchInput', 'search', 'sample', 'return-chat'])
 
 const resultCitations = computed(() => buildCitationItems(props.searchResult))
-const backgroundCitations = computed(() => buildCitationItems(props.backgroundResult))
 const resultSourceCount = computed(() => sourceCount(props.searchResult))
-const backgroundSourceCount = computed(() => sourceCount(props.backgroundResult))
+const visibleQuickSearchHistory = computed(() =>
+  props.quickSearchHistory.filter((item) => item?.kind !== 'background').slice(0, 5)
+)
 
 function quickSearchStatusLabel(status) {
   if (status === 'done') return '完成'
   if (status === 'error') return '失败'
   if (status === 'skipped') return '跳过'
   return status || '未知'
-}
-
-function quickSearchKindLabel(kind) {
-  return kind === 'background' ? '后台整理' : '首屏'
 }
 
 function formatHistoryTime(timestamp) {
@@ -54,7 +47,9 @@ function toArray(value) {
 }
 
 function truncateText(value, maxLength = 150) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  const text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
   return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
 }
 
@@ -170,22 +165,19 @@ function buildCitationItems(result) {
 
     <section
       class="card history-card"
-      v-if="quickSearchHistoryLoading || quickSearchHistory.length"
+      v-if="quickSearchHistoryLoading || visibleQuickSearchHistory.length"
     >
       <div class="history-head">
-        <h2 class="section-title">最近整理</h2>
-        <small>最多显示 5 条，来自本机 SQLite</small>
+        <h2 class="section-title">最近查询</h2>
+        <small>只显示你主动查过的资料</small>
       </div>
-      <div class="history-list" v-if="quickSearchHistory.length">
-        <div v-for="item in quickSearchHistory.slice(0, 5)" :key="item.id" class="history-item">
+      <div class="history-list" v-if="visibleQuickSearchHistory.length">
+        <div v-for="item in visibleQuickSearchHistory" :key="item.id" class="history-item">
           <div class="history-main">
             <strong>{{ item.query }}</strong>
             <p>{{ item.summary || item.error || '暂无摘要' }}</p>
           </div>
           <div class="history-meta">
-            <span class="history-pill" :class="item.kind">{{
-              quickSearchKindLabel(item.kind)
-            }}</span>
             <span class="history-pill" :class="item.status">{{
               quickSearchStatusLabel(item.status)
             }}</span>
@@ -193,7 +185,7 @@ function buildCitationItems(result) {
           </div>
         </div>
       </div>
-      <p class="history-empty" v-else>正在加载最近整理...</p>
+      <p class="history-empty" v-else>正在加载最近查询...</p>
     </section>
 
     <section class="card result-card" v-if="searchResult">
@@ -293,95 +285,6 @@ function buildCitationItems(result) {
             {{ source.scores.level || source.level }} · {{ source.scores.overall }}
           </div>
         </a>
-      </div>
-
-      <div
-        class="background-card"
-        v-if="backgroundOrganizing || backgroundMessage || backgroundError || backgroundResult"
-      >
-        <div class="background-head">
-          <div>
-            <strong>学习资源整理</strong>
-            <small>不影响当前结果，继续筛选可信、适龄、可读的资料</small>
-          </div>
-          <span class="background-status" :class="{ running: backgroundOrganizing }">
-            {{ backgroundOrganizing ? '整理中...' : backgroundResult ? '已完成' : '待机' }}
-          </span>
-        </div>
-
-        <p class="background-copy" v-if="backgroundMessage">{{ backgroundMessage }}</p>
-        <p class="error-msg" v-if="backgroundError">{{ backgroundError }}</p>
-
-        <template v-if="backgroundResult">
-          <div class="resource-meta" v-if="backgroundResult.elapsedMs || backgroundResult.cacheHit">
-            <span v-if="backgroundResult.elapsedMs">{{ backgroundResult.elapsedMs }}ms</span>
-            <span v-if="backgroundResult.cacheHit">缓存命中</span>
-            <span v-if="backgroundSourceCount">{{ backgroundSourceCount }} 个来源</span>
-          </div>
-          <div class="summary-box small">{{ backgroundResult.summary }}</div>
-
-          <div class="citation-panel compact" v-if="backgroundCitations.length">
-            <div class="citation-head">
-              <div>
-                <h3>后台补充来源</h3>
-                <p>更适合继续追溯的资料片段。</p>
-              </div>
-              <span>{{ backgroundCitations.length }} 条</span>
-            </div>
-            <div class="citation-grid">
-              <a
-                v-for="item in backgroundCitations"
-                :key="item.id"
-                class="citation-card"
-                :class="{ 'is-document': !item.url }"
-                :href="item.url || undefined"
-                :target="item.url ? '_blank' : undefined"
-              >
-                <div class="citation-top">
-                  <span class="citation-index">{{ item.label }}</span>
-                  <span class="citation-score" v-if="item.score">{{ item.score }}</span>
-                </div>
-                <strong>{{ item.title }}</strong>
-                <p v-if="item.snippet">{{ item.snippet }}</p>
-                <div class="citation-foot" v-if="item.position || item.level">
-                  <span v-if="item.position">位置 {{ item.position }}</span>
-                  <span v-if="item.level">{{ item.level }}</span>
-                </div>
-              </a>
-            </div>
-          </div>
-
-          <div class="stage-list" v-if="backgroundResult.stages?.length">
-            <div
-              v-for="stage in backgroundResult.stages.slice(0, 4)"
-              :key="stage.at + stage.name"
-              class="stage-item"
-            >
-              <span class="stage-dot" :class="stage.status"></span>
-              <strong>{{ stage.name }}</strong>
-              <small>{{ stage.detail }}</small>
-            </div>
-          </div>
-
-          <h3 class="source-title">精选学习资源</h3>
-          <div class="source-list mini">
-            <a
-              v-for="source in backgroundResult.sources"
-              :key="source.url"
-              class="source-item"
-              :href="source.url"
-              target="_blank"
-            >
-              <div class="source-main">
-                <strong>{{ source.title }}</strong>
-                <small>{{ source.url }}</small>
-              </div>
-              <div class="score-pill" v-if="source.scores">
-                {{ source.scores.level || source.level }} · {{ source.scores.overall }}
-              </div>
-            </a>
-          </div>
-        </template>
       </div>
     </section>
 

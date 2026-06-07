@@ -2,15 +2,15 @@ import { computed, nextTick, shallowRef, watch } from 'vue'
 import { marked } from 'marked'
 
 export const suggestions = [
-  '今天复习数据结构',
+  '解释二叉树遍历',
   '解释 Python 列表推导式',
   '看看作业格式有没有问题',
-  '排一下今天的学习安排'
+  '帮我把这道题讲清楚'
 ]
 
 export const quickEntries = [
   { view: 'knowledge', title: '整理课本资料', desc: '课件、笔记、作业要求放在这里', icon: '📚' },
-  { view: 'tools', title: '处理学习任务', desc: '作业、刷题、复习放在一处', icon: '✏️' }
+  { view: 'tools', title: '代码作业辅导', desc: '代码、作业文件、练习题处理', icon: '💻' }
 ]
 
 const ANIM_RE = /```animation\s*\n?([\s\S]*?)```/

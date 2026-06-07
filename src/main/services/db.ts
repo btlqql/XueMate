@@ -108,6 +108,24 @@ db.exec(`
     ON quick_search_results(updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_quick_search_results_kind_status
     ON quick_search_results(kind, status, updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS learning_signals (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK(type IN ('todo','weak_point','material_gap')),
+    title TEXT NOT NULL,
+    normalized_title TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'suggested' CHECK(status IN ('suggested','confirmed','resolved','dismissed')),
+    source TEXT NOT NULL DEFAULT 'agent' CHECK(source IN ('chat','memory','manual','agent')),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_signals_unique
+    ON learning_signals(conversation_id, type, normalized_title);
+  CREATE INDEX IF NOT EXISTS idx_learning_signals_conversation
+    ON learning_signals(conversation_id, status, updated_at DESC);
 `)
 
 function hasColumn(table: string, column: string): boolean {

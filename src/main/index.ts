@@ -41,6 +41,8 @@ import { buildLearningGraph } from './services/learningGraph'
 import { startRendererBridge, stopRendererBridge } from './services/rendererBridge'
 import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdgeRuntime'
 import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge'
+import { registerLearningSignalIpc } from './modules/learningSignals/learningSignal.ipc'
+import { extractAndSaveLearningSignals } from './modules/learningSignals/learningSignalExtractor.agent'
 import * as taskStore from './services/taskStore'
 import * as quickSearchStore from './services/quickSearchStore'
 import { ensureEnoughText, extractTextFromFile } from './services/document'
@@ -570,13 +572,16 @@ function registerLLMHandlers(): void {
           localCount: localRagCount,
           localTopScore: localRagTopScore
         })
-        console.log(`[PeerEdge] chat decision: ${peerEdgeDecision.enabled ? 'use' : 'skip'} (${peerEdgeDecision.reason})`)
+        console.log(
+          `[PeerEdge] chat decision: ${peerEdgeDecision.enabled ? 'use' : 'skip'} (${peerEdgeDecision.reason})`
+        )
 
         if (peerEdgeDecision.enabled) {
           try {
             const peerResult = await retrievePeerEvidence(content, {
               topK: 4,
-              collectionId: ragCollectionId === rag.RAG_OFF_ID ? rag.ALL_COLLECTIONS_ID : ragCollectionId,
+              collectionId:
+                ragCollectionId === rag.RAG_OFF_ID ? rag.ALL_COLLECTIONS_ID : ragCollectionId,
               timeoutMs: peerEdgeChatTimeoutMs(),
               peerLimit: peerEdgeChatFanout()
             })
@@ -646,6 +651,10 @@ function registerLLMHandlers(): void {
                 return compressMemoryIfNeeded(updated)
               })
               .catch((e) => console.error('[Memory] 后台处理失败:', e))
+            extractAndSaveLearningSignals(convId, [
+              ...recentMessages,
+              { role: 'assistant', content: fullContent }
+            ]).catch((e) => console.error('[LearningSignals] 后台抽取失败:', e))
           },
           onError(error) {
             sendChatStreamEvent(win, {
@@ -853,6 +862,7 @@ app.whenReady().then(() => {
   })
 
   registerLLMHandlers()
+  registerLearningSignalIpc(ipcMain)
   startRendererBridge(Number(process.env.XUEMATE_RENDERER_BRIDGE_PORT || 8788))
   const peerEdgeStatus = startPeerEdgeRuntime()
   if (peerEdgeStatus.running) {

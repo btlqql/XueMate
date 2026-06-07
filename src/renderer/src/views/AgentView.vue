@@ -60,10 +60,6 @@ const {
   searching,
   searchError,
   searchResult,
-  backgroundOrganizing,
-  backgroundMessage,
-  backgroundError,
-  backgroundResult,
   quickSearchHistory,
   quickSearchHistoryLoading,
   runQuickSearch,
@@ -94,7 +90,7 @@ const {
   clearControl
 } = useWebAssistant(activeMode)
 
-const preferredWebMaterial = computed(() => backgroundResult.value || searchResult.value)
+const preferredWebMaterial = computed(() => searchResult.value)
 const canReturnWebMaterialToChat = computed(() => Boolean(preferredWebMaterial.value))
 const returnToChatLabel = computed(() =>
   returnConversationId.value ? '带回原对话继续问' : '带回问学伴'
@@ -137,13 +133,6 @@ function returnWebMaterialToChat() {
 
 function openKnowledge() {
   emit('navigate', 'knowledge')
-}
-
-function openStudyTool(tool) {
-  emit('navigate', {
-    view: 'tools',
-    tool
-  })
 }
 
 watch(
@@ -220,9 +209,6 @@ watch(
         <button class="btn btn-outline btn-sm" type="button" @click="openKnowledge">
           去资料库
         </button>
-        <button class="btn btn-outline btn-sm" type="button" @click="openStudyTool('task')">
-          整理作业
-        </button>
       </div>
     </div>
 
@@ -233,10 +219,6 @@ watch(
       :searching="searching"
       :search-error="searchError"
       :search-result="searchResult"
-      :background-organizing="backgroundOrganizing"
-      :background-message="backgroundMessage"
-      :background-error="backgroundError"
-      :background-result="backgroundResult"
       :quick-search-history="quickSearchHistory"
       :quick-search-history-loading="quickSearchHistoryLoading"
       :search-samples="searchSamples"
@@ -784,7 +766,10 @@ watch(
   background: #ffffff;
   color: inherit;
   text-decoration: none;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    transform 0.15s;
 }
 
 .agent-view .citation-card:hover {
@@ -1010,58 +995,6 @@ watch(
   font-size: 12px;
   font-weight: 650;
   line-height: 1.45;
-}
-
-.agent-view .background-card {
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: var(--xm-radius-lg);
-  border: 1px dashed #93c5fd;
-  background: linear-gradient(180deg, #eff6ff, #ffffff);
-}
-
-.agent-view .background-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.agent-view .background-head strong {
-  display: block;
-  color: #1e3a8a;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.agent-view .background-head small {
-  display: block;
-  color: #64748b;
-  margin-top: 3px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.agent-view .background-status {
-  padding: 5px 10px;
-  border-radius: var(--xm-radius-pill);
-  background: #e0f2fe;
-  color: #0369a1;
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.agent-view .background-status.running {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.agent-view .background-copy {
-  margin: 10px 0 0;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 700;
 }
 
 .agent-view .source-list.mini .source-item {

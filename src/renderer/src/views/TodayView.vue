@@ -8,15 +8,12 @@ const loadingStats = ref(false)
 const docCount = ref(0)
 const collectionCount = ref(0)
 const conversationCount = ref(0)
-const pendingTaskCount = ref(0)
 const lastConversationTitle = ref('')
 
 const hasMaterials = computed(() => docCount.value > 0)
 const trimmedPrompt = computed(() => promptText.value.trim())
 const todayAdvice = computed(() => {
   if (!hasMaterials.value) return '先导入老师课件、笔记或作业，学伴回答会更有依据。'
-  if (pendingTaskCount.value > 0)
-    return `还有 ${pendingTaskCount.value} 个待办，建议先整理作业再提问。`
   if (lastConversationTitle.value) return `可以继续上次的问题：「${lastConversationTitle.value}」。`
   return '可以直接带着资料问学伴，遇到资料不够再补网页资料。'
 })
@@ -42,10 +39,6 @@ function countCollectionDocs(collections) {
   }, 0)
 }
 
-function countPendingTasks(tasks) {
-  return safeArray(tasks).filter((task) => task?.status !== 'done').length
-}
-
 function resolveConversationTitle(conversations) {
   const firstConversation = safeArray(conversations)[0]
   if (!firstConversation) return ''
@@ -58,20 +51,17 @@ async function loadDashboard() {
 
   loadingStats.value = true
   try {
-    const [collectionsResult, conversationsResult, tasksResult] = await Promise.allSettled([
+    const [collectionsResult, conversationsResult] = await Promise.allSettled([
       appWindow.rag?.collections?.() || Promise.resolve({ success: false }),
-      appWindow.chat?.getConversations?.() || Promise.resolve({ success: false }),
-      appWindow.task?.getAll?.() || Promise.resolve({ success: false })
+      appWindow.chat?.getConversations?.() || Promise.resolve({ success: false })
     ])
 
     const collections = safeArray(getResultData(collectionsResult))
     const conversations = safeArray(getResultData(conversationsResult))
-    const tasks = safeArray(getResultData(tasksResult))
 
     collectionCount.value = collections.length
     docCount.value = countCollectionDocs(collections)
     conversationCount.value = conversations.length
-    pendingTaskCount.value = countPendingTasks(tasks)
     lastConversationTitle.value = resolveConversationTitle(conversations)
   } finally {
     loadingStats.value = false
@@ -105,24 +95,10 @@ function importMaterials() {
   emit('navigate', 'knowledge')
 }
 
-function organizeHomework() {
-  emit('navigate', {
-    view: 'tools',
-    tool: 'task'
-  })
-}
-
 function openTutor() {
   emit('navigate', {
     view: 'tools',
     tool: 'tutor'
-  })
-}
-
-function openReviewPlan() {
-  emit('navigate', {
-    view: 'tools',
-    tool: 'review'
   })
 }
 
@@ -145,7 +121,7 @@ onMounted(loadDashboard)
       <div class="hero-copy">
         <p class="hero-kicker">资料驱动个性化学伴</p>
         <h1>今天先完成哪一件？</h1>
-        <p>把作业、资料、提问和复习放进同一条学习线：先有资料，再问学伴，不够就补网页资料。</p>
+        <p>把资料、提问和网页补充放进同一条学习线：先有资料，再问学伴，不够就补网页资料。</p>
       </div>
 
       <div class="hero-loop" aria-label="XueMate 学习闭环">
@@ -153,15 +129,15 @@ onMounted(loadDashboard)
         <i></i>
         <span>问学伴</span>
         <i></i>
-        <span>补资料</span>
+        <span>补网页资料</span>
         <i></i>
-        <span>复习弱点</span>
+        <span>回到问学伴</span>
       </div>
     </section>
 
     <section class="today-command card">
       <div>
-        <h2 class="command-title">问知识点、贴题目，或安排今天 30 分钟学习</h2>
+        <h2 class="command-title">问知识点、贴题目，或带着资料继续学</h2>
         <p class="command-desc">{{ todayAdvice }}</p>
       </div>
       <form class="command-form" @submit.prevent="askMate">
@@ -192,12 +168,6 @@ onMounted(loadDashboard)
         <p>先把老师资料放进资料库，后面的回答才有依据。</p>
       </button>
 
-      <button class="journey-card" type="button" @click="organizeHomework">
-        <span class="card-step">作业</span>
-        <strong>整理作业清单</strong>
-        <p>把通知里的要求、截止时间和提交格式拆清楚。</p>
-      </button>
-
       <button class="journey-card" type="button" @click="searchWebMaterials">
         <span class="card-step">补充</span>
         <strong>查网页资料</strong>
@@ -208,12 +178,6 @@ onMounted(loadDashboard)
         <span class="card-step">辅导</span>
         <strong>代码与作业辅导</strong>
         <p>把明确的代码、作业文件或练习题交给学习工具处理。</p>
-      </button>
-
-      <button class="journey-card muted" type="button" @click="openReviewPlan">
-        <span class="card-step">复习</span>
-        <strong>复习计划</strong>
-        <p>先做课程提纲，后续接入学伴记录的薄弱点。</p>
       </button>
     </section>
 
@@ -229,10 +193,6 @@ onMounted(loadDashboard)
       <div class="stat-pill">
         <strong>{{ loadingStats ? '...' : conversationCount }}</strong>
         <span>次问学伴</span>
-      </div>
-      <div class="stat-pill">
-        <strong>{{ loadingStats ? '...' : pendingTaskCount }}</strong>
-        <span>个待办</span>
       </div>
     </section>
   </div>
@@ -356,7 +316,7 @@ onMounted(loadDashboard)
 
 .today-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -389,10 +349,6 @@ onMounted(loadDashboard)
   background: linear-gradient(180deg, #f4ffec 0%, #ffffff 100%);
 }
 
-.journey-card.muted {
-  background: #fbfcfe;
-}
-
 .card-step {
   padding: 4px 10px;
   border-radius: var(--xm-radius-pill);
@@ -421,7 +377,7 @@ onMounted(loadDashboard)
 
 .today-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
