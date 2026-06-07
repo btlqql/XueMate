@@ -1,6 +1,6 @@
-import { chat } from './llm'
+import { chat } from '../ai/llm'
 import { loadArchive, saveArchive } from './memoryArchive'
-import type { ArchiveModule, UserMemory } from '../domain/memory'
+import type { ArchiveModule, UserMemory } from '../../domain/memory'
 
 // 每个模块独立的压缩阈值
 const COMPRESS_THRESHOLD = 5

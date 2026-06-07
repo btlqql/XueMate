@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto'
-import type { ChatMessage, Conversation } from '../domain/chat'
-import * as chatDao from '../dao/chatDao'
-import { rowToChatMessage, rowToConversation } from '../mappers/chatMapper'
+import type { ChatMessage, Conversation } from '../../domain/chat'
+import * as chatDao from '../../dao/chatDao'
+import { rowToChatMessage, rowToConversation } from '../../mappers/chatMapper'
 
-export type { ChatMessage, Conversation } from '../domain/chat'
+export type { ChatMessage, Conversation } from '../../domain/chat'
 
 const MAX_MESSAGES = 500
 const DEFAULT_TITLE = '新对话'
@@ -64,10 +64,7 @@ function trimOldMessagesIfNeeded(conversationId: string): void {
   }
 }
 
-function updateDefaultTitleIfFirstUserMessage(
-  conversationId: string,
-  message: ChatMessage
-): void {
+function updateDefaultTitleIfFirstUserMessage(conversationId: string, message: ChatMessage): void {
   if (message.role !== 'user') return
 
   const conversation = chatDao.findConversationById(conversationId)

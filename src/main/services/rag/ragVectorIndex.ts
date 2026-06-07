@@ -2,8 +2,8 @@ import {
   findChunkEmbeddings,
   findChunkEmbeddingsByCollection,
   type ChunkEmbeddingRow
-} from '../dao/ragDao'
-import { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID } from '../domain/rag'
+} from '../../dao/ragDao'
+import { ALL_COLLECTIONS_ID, DEFAULT_COLLECTION_ID } from '../../domain/rag'
 import { embeddingBlobToFloat32, normalizeFloat32InPlace } from './vectorMath'
 
 const ALL_COLLECTIONS_CACHE_KEY = '__all_collections__'

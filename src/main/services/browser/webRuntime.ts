@@ -461,9 +461,14 @@ export async function captureBrowserState(): Promise<BrowserState> {
     capturePageWithRetry(webContents),
     extractInteractiveElements(webContents)
   ])
+  const imageSize = image.getSize()
+  const targetWidth = Math.max(1, imageSize.width || viewportWidth)
+  const targetHeight = Math.max(1, imageSize.height || viewportHeight)
+  viewportWidth = targetWidth
+  viewportHeight = targetHeight
   const normalizedImage = image.resize({
-    width: viewportWidth,
-    height: viewportHeight,
+    width: targetWidth,
+    height: targetHeight,
     quality: 'good'
   })
   const size = normalizedImage.getSize()

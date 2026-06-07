@@ -1,4 +1,4 @@
-import type { UserMemory } from '../domain/memory'
+import type { UserMemory } from '../../domain/memory'
 import { activeAtoms, decayedConfidence } from './memoryProfile'
 import { loadArchive } from './memoryArchive'
 

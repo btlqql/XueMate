@@ -1,4 +1,4 @@
-import db from '../services/db'
+import db from '../services/infrastructure/db'
 import type { ChatRole } from '../domain/chat'
 
 export interface ConversationRow {
@@ -62,7 +62,10 @@ export function deleteConversation(id: string): number {
   return result.changes
 }
 
-export function insertMessage(conversationId: string, row: Omit<MessageRow, 'conversation_id'>): void {
+export function insertMessage(
+  conversationId: string,
+  row: Omit<MessageRow, 'conversation_id'>
+): void {
   stmts.insertMessage.run(row.id, conversationId, row.role, row.content, row.timestamp)
 }
 

@@ -1,9 +1,9 @@
 import { compressMemoryIfNeeded as compressMemoryIfNeededInternal } from './memoryCompressor'
 import { extractMemory as extractMemoryInternal } from './memoryExtractor'
 import { normalizeMemory } from './memoryNormalizer'
-import * as memoryDao from '../dao/memoryDao'
-import type { UserMemory } from '../domain/memory'
-import { DEFAULT_MEMORY } from '../domain/memory'
+import * as memoryDao from '../../dao/memoryDao'
+import type { UserMemory } from '../../domain/memory'
+import { DEFAULT_MEMORY } from '../../domain/memory'
 
 export { buildSystemPrompt } from './memoryPrompt'
 
@@ -17,7 +17,7 @@ export type {
   MemoryCategory,
   MemoryMetrics,
   UserMemory
-} from '../domain/memory'
+} from '../../domain/memory'
 
 export function getMemory(): UserMemory {
   try {
@@ -34,7 +34,6 @@ export function saveMemory(memory: UserMemory): void {
   memory.lastUpdated = Date.now()
   memoryDao.saveMemoryData(JSON.stringify(memory), memory.lastUpdated)
 }
-
 
 export async function extractMemory(
   recentMessages: { role: string; content: string }[],

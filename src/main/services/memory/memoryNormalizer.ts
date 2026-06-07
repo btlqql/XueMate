@@ -1,5 +1,5 @@
-import type { UserMemory } from '../domain/memory'
-import { DEFAULT_MEMORY, MEMORY_VERSION } from '../domain/memory'
+import type { UserMemory } from '../../domain/memory'
+import { DEFAULT_MEMORY, MEMORY_VERSION } from '../../domain/memory'
 import {
   normalizeAtoms,
   refreshMemoryDerivedState,
@@ -83,7 +83,10 @@ export function normalizeMemory(raw: Partial<UserMemory> | any): UserMemory {
 }
 
 function normalizeLanguagePreference(value: string): string {
-  const label = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 24)
+  const label = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24)
   if (!label) return DEFAULT_MEMORY.preferences.language
   if (/^(zh|cn|中文|汉语|普通话)$/i.test(label)) return 'zh'
   if (/^(en|eng|english|英文|英语)$/i.test(label)) return 'en'

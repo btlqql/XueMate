@@ -1,6 +1,6 @@
-import { chat } from './llm'
+import { chat } from '../ai/llm'
 import { classifyCommand, execInSandbox, ensureSandbox } from './sandbox'
-import { fetchPage, searchAndFetch } from './web'
+import { fetchPage, searchAndFetch } from '../browser/webRuntime'
 
 // 全局系统提示词
 const SYSTEM_PROMPT = `你是 XueMate 智能学习助手，面向中小学生。你的职责是帮助学生完成学习任务。

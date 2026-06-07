@@ -23,7 +23,8 @@
     "mcp:build": "cargo build --release --manifest-path mcp-gateway-rs/Cargo.toml",
     "bench:mcp": "node scripts/bench-mcp-layer.mjs",
     "peeredge:build": "cargo build --release --manifest-path peer-edge-rs/Cargo.toml",
-    "peeredge:dev": "cargo run --manifest-path peer-edge-rs/Cargo.toml"
+    "peeredge:dev": "cargo run --manifest-path peer-edge-rs/Cargo.toml",
+    "bench:agent-mcp": "node scripts/bench-internal-agent-mcp.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "3.0.2",

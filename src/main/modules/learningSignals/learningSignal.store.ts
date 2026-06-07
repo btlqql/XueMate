@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import db from '../../services/db'
+import db from '../../services/infrastructure/db'
 import type {
   LearningSignal,
   LearningSignalDraft,

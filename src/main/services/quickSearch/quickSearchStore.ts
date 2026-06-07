@@ -5,9 +5,12 @@ import type {
   QuickSearchKind,
   QuickSearchRecord,
   QuickSearchStatus
-} from '../domain/quickSearch'
-import * as quickSearchDao from '../dao/quickSearchDao'
-import { quickSearchRecordToInsertRow, rowToQuickSearchRecord } from '../mappers/quickSearchMapper'
+} from '../../domain/quickSearch'
+import * as quickSearchDao from '../../dao/quickSearchDao'
+import {
+  quickSearchRecordToInsertRow,
+  rowToQuickSearchRecord
+} from '../../mappers/quickSearchMapper'
 
 interface SaveResultInput {
   id?: string

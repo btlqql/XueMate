@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import './services/consolePipeGuard'
+import './services/app/consolePipeGuard'
 import { app, shell, BrowserWindow, ipcMain, dialog, Notification } from 'electron'
 import { randomUUID } from 'crypto'
 import { join, basename } from 'path'
@@ -16,48 +16,45 @@ import {
   chatStream,
   MODEL,
   PRO_MODEL
-} from './services/llm'
-import { runAgent } from './services/agent'
-import { runWebAssistant, type WebAssistantUpdate } from './services/computerUse'
-import { quickSearch } from './services/quickSearch'
+} from './services/ai/llm'
+import { runAgent } from './services/agent/agent'
+import { quickSearch } from './services/quickSearch/quickSearch'
 import {
   destroyWebView,
   setHostWindow,
   showBrowserAtHeight,
-  hideBrowser,
-  setLiveBrowserBounds,
-  stopActiveBrowserLoading
-} from './services/web'
-import * as chatStore from './services/chatStore'
+  hideBrowser
+} from './services/browser/webRuntime'
+import * as chatStore from './services/chat/chatStore'
 import {
   getMemory,
   saveMemory,
   buildSystemPrompt,
   extractMemory,
   compressMemoryIfNeeded
-} from './services/memory'
-import * as rag from './services/rag'
-import { buildLearningGraph } from './services/learningGraph'
-import { startRendererBridge, stopRendererBridge } from './services/rendererBridge'
-import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdgeRuntime'
-import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge'
+} from './services/memory/memory'
+import * as rag from './services/rag/rag'
+import { buildLearningGraph } from './services/rag/learningGraph'
+import { startRendererBridge, stopRendererBridge } from './services/bridge/rendererBridge'
+import { startPeerEdgeRuntime, stopPeerEdgeRuntime } from './services/peerEdge/peerEdgeRuntime'
+import { buildPeerEdgeContext, retrievePeerEvidence } from './services/peerEdge/peerEdge'
+import { buildAgentRagContext } from './services/agent/agentLearningTools'
+import {
+  getInternalMcpStatus,
+  stopInternalMcpClient,
+  warmInternalMcpClient
+} from './services/mcp/internalMcpClient'
 import { registerLearningSignalIpc } from './modules/learningSignals/learningSignal.ipc'
+import { registerWebAssistantIpc } from './modules/webAssistant/webAssistant.ipc'
 import { extractAndSaveLearningSignals } from './modules/learningSignals/learningSignalExtractor.agent'
-import * as taskStore from './services/taskStore'
-import * as quickSearchStore from './services/quickSearchStore'
-import { ensureEnoughText, extractTextFromFile } from './services/document'
+import * as taskStore from './services/task/taskStore'
+import * as quickSearchStore from './services/quickSearch/quickSearchStore'
+import { ensureEnoughText, extractTextFromFile } from './services/document/document'
 import type { NewTask, TaskEditableFields } from './domain/task'
 import type { QuickSearchFilters } from './domain/quickSearch'
 
 // 启动时自动迁移旧数据
 let agentRunning = false
-let webAssistantRun: {
-  id: string
-  win: BrowserWindow | null
-  stopRequested: boolean
-  seq: number
-} | null = null
-
 let confirmResolve: ((approved: boolean) => void) | null = null
 
 type ChatStreamEventType = 'token' | 'done' | 'error'
@@ -77,10 +74,6 @@ function createChatRequestId(): string {
 
 function createQuickSearchRunId(): string {
   return `qsrun_${Date.now()}_${randomUUID()}`
-}
-
-function createWebAssistantRunId(): string {
-  return `warun_${Date.now()}_${randomUUID()}`
 }
 
 function sendChatStreamEvent<T>(
@@ -351,82 +344,6 @@ function registerLLMHandlers(): void {
     return { success: true }
   })
 
-  // 网页小助手：普通多模态模型看截图，然后控制内置浏览器
-  ipcMain.handle('webAssistant:start', async (event, goal: string) => {
-    if (webAssistantRun) {
-      return {
-        success: false,
-        error: webAssistantRun.stopRequested
-          ? '网页小助手正在停止，请等它完全结束后再开始'
-          : '网页小助手正在执行',
-        runId: webAssistantRun.id
-      }
-    }
-
-    const runId = createWebAssistantRunId()
-    const win = BrowserWindow.fromWebContents(event.sender)
-    webAssistantRun = {
-      id: runId,
-      win,
-      stopRequested: false,
-      seq: 0
-    }
-
-    const sendRunUpdate = (data: WebAssistantUpdate) => {
-      const run = webAssistantRun
-      if (!run || run.id !== runId) return
-      run.seq += 1
-      if (win && !win.isDestroyed()) {
-        try {
-          win.webContents.send('webAssistant:update', {
-            ...data,
-            runId,
-            seq: run.seq
-          })
-        } catch (error) {
-          console.warn('[WebAssistant] update 发送失败:', getErrorMessage(error))
-        }
-      }
-    }
-
-    try {
-      const result = await runWebAssistant(goal, sendRunUpdate, () => {
-        return !webAssistantRun || webAssistantRun.id !== runId || webAssistantRun.stopRequested
-      })
-      return { ...result, runId }
-    } finally {
-      if (webAssistantRun?.id === runId) {
-        webAssistantRun = null
-      }
-    }
-  })
-
-  ipcMain.handle('webAssistant:stop', async (_event, runId?: string) => {
-    if (!webAssistantRun) return { success: true }
-    if (runId && webAssistantRun.id !== runId) {
-      return { success: true, ignored: true }
-    }
-
-    webAssistantRun.stopRequested = true
-    stopActiveBrowserLoading()
-    webAssistantRun.seq += 1
-    if (webAssistantRun.win && !webAssistantRun.win.isDestroyed()) {
-      webAssistantRun.win.webContents.send('webAssistant:update', {
-        runId: webAssistantRun.id,
-        seq: webAssistantRun.seq,
-        state: 'cancelling',
-        terminal: false,
-        error: ''
-      })
-    }
-    return { success: true }
-  })
-
-  ipcMain.handle('webAssistant:setLiveBounds', async (_event, bounds) => {
-    setLiveBrowserBounds(bounds || null)
-    return { success: true }
-  })
-
   ipcMain.handle('quickSearch:run', async (event, query: string) => {
     const runId = createQuickSearchRunId()
     try {
@@ -543,29 +460,17 @@ function registerLLMHandlers(): void {
         let localRagCount = 0
         let localRagTopScore = 0
         const ragCollectionId = options?.collectionId || rag.ALL_COLLECTIONS_ID
-        const stats =
-          ragCollectionId === rag.RAG_OFF_ID
-            ? { docCount: 0, chunkCount: 0 }
-            : rag.getStats(ragCollectionId)
-        if (stats.chunkCount > 0) {
-          try {
-            const results = await rag.retrieve(content, {
-              topK: 4,
-              candidateK: 48,
-              minScore: 0.16,
-              collectionId: ragCollectionId
-            })
-            localRagCount = results.length
-            localRagTopScore = results[0]?.score || 0
-            if (results.length > 0 && results[0].score > 0.24) {
-              ragContext = rag.buildRagContext(results, {
-                title: '以下是用户课程资料中的相关内容'
-              })
-            }
-          } catch (e) {
-            console.error('[RAG] 检索失败:', e)
-          }
-        }
+        const ragResult = await buildAgentRagContext(content, {
+          topK: 4,
+          candidateK: 48,
+          minScore: 0.16,
+          minInjectScore: 0.24,
+          collectionId: ragCollectionId,
+          title: '以下是用户课程资料中的相关内容'
+        })
+        ragContext = ragResult.context
+        localRagCount = ragResult.localCount
+        localRagTopScore = ragResult.localTopScore
 
         const peerEdgeDecision = getPeerEdgeChatDecision({
           collectionId: ragCollectionId,
@@ -863,7 +768,18 @@ app.whenReady().then(() => {
 
   registerLLMHandlers()
   registerLearningSignalIpc(ipcMain)
+  registerWebAssistantIpc(ipcMain)
   startRendererBridge(Number(process.env.XUEMATE_RENDERER_BRIDGE_PORT || 8788))
+  warmInternalMcpClient()
+    .then(() => {
+      const status = getInternalMcpStatus()
+      if (status.running) {
+        console.log(`[InternalMCP] internal agent tools ready: ${status.binaryPath}`)
+      }
+    })
+    .catch((error) => {
+      console.warn('[InternalMCP] inactive, agent will fallback direct:', getErrorMessage(error))
+    })
   const peerEdgeStatus = startPeerEdgeRuntime()
   if (peerEdgeStatus.running) {
     console.log(
@@ -920,11 +836,13 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  stopInternalMcpClient()
   stopPeerEdgeRuntime()
 })
 
 app.on('window-all-closed', () => {
   destroyWebView()
+  stopInternalMcpClient()
   stopPeerEdgeRuntime()
   stopRendererBridge()
   if (process.platform !== 'darwin') {

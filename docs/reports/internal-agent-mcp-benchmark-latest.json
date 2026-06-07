@@ -1,0 +1,51 @@
+{
+  "createdAt": "2026-06-07T12:50:31.259Z",
+  "bridgeUrl": "http://127.0.0.1:8788",
+  "gatewayBinary": "/Users/wangyue/wangyue/XueMate/mcp-gateway-rs/target/release/xuemate-mcp-gateway",
+  "query": "函数单调性和导数有什么关系？",
+  "collectionId": "all",
+  "samples": 16,
+  "warmup": 3,
+  "results": [
+    {
+      "label": "direct cold",
+      "samples": 16,
+      "avgMs": 533.19,
+      "minMs": 320.42,
+      "maxMs": 859.18,
+      "p50Ms": 481.95,
+      "p95Ms": 859.18,
+      "lastCount": 4
+    },
+    {
+      "label": "direct cached",
+      "samples": 16,
+      "avgMs": 1.49,
+      "minMs": 1.16,
+      "maxMs": 2,
+      "p50Ms": 1.41,
+      "p95Ms": 2,
+      "lastCount": 4
+    },
+    {
+      "label": "internal MCP cold",
+      "samples": 16,
+      "avgMs": 465.12,
+      "minMs": 289.05,
+      "maxMs": 987.29,
+      "p50Ms": 440.76,
+      "p95Ms": 987.29,
+      "lastCount": 4
+    },
+    {
+      "label": "internal MCP cached",
+      "samples": 16,
+      "avgMs": 0.95,
+      "minMs": 0.8,
+      "maxMs": 1.24,
+      "p50Ms": 0.91,
+      "p95Ms": 1.24,
+      "lastCount": 4
+    }
+  ]
+}

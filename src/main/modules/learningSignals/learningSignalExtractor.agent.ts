@@ -1,4 +1,4 @@
-import { chat } from '../../services/llm'
+import { chat } from '../../services/ai/llm'
 import { getErrorMessage } from '../../shared/errors'
 import { upsertLearningSignals } from './learningSignal.store'
 import type { LearningSignalDraft, LearningSignalType } from './learningSignal.domain'
