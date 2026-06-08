@@ -1,9 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { searchSamples, useQuickSearch } from '../composables/useQuickSearch'
-import { controlSamples, stateLabel, useWebAssistant } from '../composables/useWebAssistant'
 import QuickSearchPanel from '../components/agent/QuickSearchPanel.vue'
-import WebAssistantPanel from '../components/agent/WebAssistantPanel.vue'
+import ComputerAgentPanel from '../components/agent/ComputerAgentPanel.vue'
 
 const props = defineProps({
   currentRoute: { type: Object, default: null },
@@ -12,7 +11,7 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const modeIds = ['search', 'control']
+const modeIds = ['search', 'computer']
 const activeMode = ref('search')
 const returnConversationId = ref('')
 
@@ -66,29 +65,6 @@ const {
   loadSearchSample,
   setSearchDraftPrompt
 } = useQuickSearch({ draftPrompt: resolveDraftPrompt() })
-
-const {
-  goalInput,
-  browserPreview,
-  running,
-  state,
-  steps,
-  screenshotSrc,
-  currentUrl,
-  currentTitle,
-  stepIndex,
-  maxSteps,
-  friendlyError,
-  error,
-  answer,
-  setBrowserBoxElement,
-  domElementCount,
-  domCandidates,
-  loadControlSample,
-  startAssistant,
-  stopAssistant,
-  clearControl
-} = useWebAssistant(activeMode)
 
 const preferredWebMaterial = computed(() => searchResult.value)
 const canReturnWebMaterialToChat = computed(() => Boolean(preferredWebMaterial.value))
@@ -163,8 +139,10 @@ watch(
 <template>
   <div class="fade-in agent-view">
     <div class="page-header">
-      <h1 class="page-title">网页资料</h1>
-      <p class="page-desc">当本地资料不够时，先找一版补充资料；复杂网页操作放到高级模式</p>
+      <h1 class="page-title">学习 Agent</h1>
+      <p class="page-desc">
+        当本地资料不够时补网页资料；需要检查电脑状态时，用沙箱优先的电脑 Agent。
+      </p>
     </div>
 
     <div class="mode-tabs">
@@ -181,13 +159,13 @@ watch(
       </button>
       <button
         class="mode-tab"
-        :class="{ active: activeMode === 'control' }"
-        @click="activeMode = 'control'"
+        :class="{ active: activeMode === 'computer' }"
+        @click="activeMode = 'computer'"
       >
-        <span class="mode-icon">🖱️</span>
+        <span class="mode-icon">🖥️</span>
         <span>
-          <strong>网页助手（高级）</strong>
-          <small>打开网页后一步步处理</small>
+          <strong>电脑 Agent</strong>
+          <small>沙箱命令优先，必要时看屏幕</small>
         </span>
       </button>
     </div>
@@ -229,32 +207,8 @@ watch(
       @return-chat="returnWebMaterialToChat"
     />
 
-    <!-- 网页助手 -->
-    <WebAssistantPanel
-      v-else
-      v-model:goalInput="goalInput"
-      :browser-preview="browserPreview"
-      :running="running"
-      :state="state"
-      :state-label="stateLabel"
-      :steps="steps"
-      :step-index="stepIndex"
-      :max-steps="maxSteps"
-      :screenshot-src="screenshotSrc"
-      :current-url="currentUrl"
-      :current-title="currentTitle"
-      :friendly-error="friendlyError"
-      :raw-error="error"
-      :answer="answer"
-      :control-samples="controlSamples"
-      :dom-candidates="domCandidates"
-      :dom-element-count="domElementCount"
-      :set-browser-box-element="setBrowserBoxElement"
-      @start="startAssistant"
-      @stop="stopAssistant"
-      @clear="clearControl"
-      @sample="loadControlSample"
-    />
+    <!-- 电脑 Agent -->
+    <ComputerAgentPanel v-else />
   </div>
 </template>
 

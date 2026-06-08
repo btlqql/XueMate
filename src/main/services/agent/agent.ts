@@ -1,6 +1,7 @@
 import { chat } from '../ai/llm'
 import { classifyCommand, execInSandbox, ensureSandbox } from './sandbox'
 import { fetchPage, searchAndFetch } from '../browser/webRuntime'
+import { observeDesktopWithVision } from './desktopVision'
 
 // 全局系统提示词
 const SYSTEM_PROMPT = `你是 XueMate 智能学习助手，面向中小学生。你的职责是帮助学生完成学习任务。
@@ -17,6 +18,7 @@ type AgentState =
   | 'thinking'
   | 'executing'
   | 'browsing'
+  | 'observing'
   | 'waiting_confirm'
   | 'done'
   | 'error'
@@ -40,6 +42,7 @@ interface AgentContext {
   browseCount: number
   maxBrowse: number
   webMemory: string[]
+  screenObservations: string[]
 }
 
 const MAX_STEPS = 15
@@ -48,9 +51,38 @@ const MAX_BROWSE = 3 // 最多浏览/搜索 3 次
 interface PlanResult {
   thinking: string
   command: string | null
-  action: 'shell' | 'search' | 'browse' | 'done'
+  action: 'shell' | 'search' | 'browse' | 'observe_screen' | 'done'
   query?: string
   url?: string
+}
+
+interface AgentUpdate {
+  state: AgentState
+  steps: AgentStep[]
+  stepCount: number
+}
+
+function getErrorMessage(error: unknown, fallback = '未知错误'): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizePlanResult(value: unknown): PlanResult | null {
+  if (!isRecord(value)) return null
+  const action = typeof value.action === 'string' ? value.action : ''
+  if (!['shell', 'search', 'browse', 'observe_screen', 'done'].includes(action)) return null
+  return {
+    thinking: typeof value.thinking === 'string' ? value.thinking : '',
+    action: action as PlanResult['action'],
+    command: typeof value.command === 'string' ? value.command : null,
+    query: typeof value.query === 'string' ? value.query : undefined,
+    url: typeof value.url === 'string' ? value.url : undefined
+  }
 }
 
 // 校验 plan 是否完整有效
@@ -61,6 +93,8 @@ function validatePlan(plan: PlanResult): boolean {
       return !!plan.query
     case 'browse':
       return !!plan.url
+    case 'observe_screen':
+      return true
     case 'shell':
       return !!plan.command
     case 'done':
@@ -86,14 +120,20 @@ async function planNextStep(ctx: AgentContext): Promise<PlanResult> {
 
   const webContext =
     ctx.webMemory.length > 0 ? `\n已获取的网页信息：\n${ctx.webMemory.join('\n---\n')}` : ''
+  const screenContext =
+    ctx.screenObservations.length > 0
+      ? `\n已观察的屏幕状态：\n${ctx.screenObservations.join('\n---\n')}`
+      : ''
 
   const prompt = `你是一个智能助手，帮助用户在 macOS 上完成任务。你可以：
 1. 执行 shell 命令
 2. 搜索网页获取信息
 3. 打开指定网页提取内容
+4. 在命令行无法判断 GUI/弹窗/真实屏幕状态时，观察一次当前屏幕
 
 用户任务：${ctx.task}
 ${webContext}
+${screenContext}
 
 已执行步骤：
 ${history || '（还没有执行任何步骤）'}
@@ -101,20 +141,21 @@ ${history || '（还没有执行任何步骤）'}
 请决定下一步操作。返回JSON格式：
 {
   "thinking": "你的分析和计划（简短）",
-  "action": "search 或 browse 或 shell 或 done",
+  "action": "search 或 browse 或 shell 或 observe_screen 或 done",
   "query": "搜索关键词（仅当 action=search 时需要）",
   "url": "要打开的网址（仅当 action=browse 时需要）",
   "command": "shell命令（仅当 action=shell 时需要，其他情况为null）"
 }
 
 规则：
-1. 需要查找信息时用 search
-2. 需要访问特定网页时用 browse
-3. 需要执行命令时用 shell
-4. 任务完成时用 done
-5. 一次只做一个操作
-6. 搜索/浏览最多 ${MAX_BROWSE} 次，已用 ${ctx.browseCount} 次，用完后必须用 shell 或 done
-7. 只返回JSON，不要其他文字`
+1. 默认优先用 shell，因为已有 sandbox 可以安全执行命令、读文件、查状态
+2. 需要查找公开学习资料时用 search
+3. 需要访问特定网页文本时用 browse
+4. 只有当 shell/search/browse 都无法判断 GUI、系统弹窗、真实窗口状态时，才用 observe_screen
+5. 任务完成时用 done
+6. 一次只做一个操作
+7. 搜索/浏览最多 ${MAX_BROWSE} 次，已用 ${ctx.browseCount} 次，用完后必须用 shell 或 done
+8. 只返回JSON，不要其他文字`
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -136,29 +177,31 @@ ${history || '（还没有执行任何步骤）'}
         jsonStr = jsonMatch[0]
       }
 
-      const parsed = JSON.parse(jsonStr)
+      const parsedRaw: unknown = JSON.parse(jsonStr)
+      const parsedRecord = isRecord(parsedRaw) ? { ...parsedRaw } : {}
 
       // 兼容各种格式：推断 action
-      if (!parsed.action) {
-        if (parsed.done === true) {
-          parsed.action = 'done'
-        } else if (parsed.query) {
-          parsed.action = 'search'
-        } else if (parsed.url) {
-          parsed.action = 'browse'
-        } else if (parsed.command) {
-          parsed.action = 'shell'
+      if (!parsedRecord.action) {
+        if (parsedRecord.done === true) {
+          parsedRecord.action = 'done'
+        } else if (parsedRecord.query) {
+          parsedRecord.action = 'search'
+        } else if (parsedRecord.url) {
+          parsedRecord.action = 'browse'
+        } else if (parsedRecord.command) {
+          parsedRecord.action = 'shell'
         }
         // 不再默认 fallback 到 done
       }
+      const parsed = normalizePlanResult(parsedRecord)
 
       // 校验完整性：action 必须合法，且对应字段不能缺
-      if (validatePlan(parsed)) {
+      if (parsed && validatePlan(parsed)) {
         console.log('[Agent] 解析结果:', JSON.stringify(parsed))
         return parsed
       }
 
-      console.warn(`[Agent] plan 校验失败 (尝试 ${attempt + 1}):`, JSON.stringify(parsed))
+      console.warn(`[Agent] plan 校验失败 (尝试 ${attempt + 1}):`, JSON.stringify(parsedRecord))
     } catch (e) {
       console.error(`[Agent] JSON 解析失败 (尝试 ${attempt + 1}):`, e)
     }
@@ -205,7 +248,7 @@ export async function summarizeResults(query: string, rawText: string): Promise<
 
 export async function runAgent(
   task: string,
-  onUpdate: (data: any) => void,
+  onUpdate: (data: AgentUpdate) => void,
   onConfirm: (command: string, reason: string) => Promise<boolean>,
   shouldStop?: () => boolean
 ): Promise<{ success: boolean; steps: AgentStep[]; error?: string }> {
@@ -219,7 +262,8 @@ export async function runAgent(
     maxSteps: MAX_STEPS,
     browseCount: 0,
     maxBrowse: MAX_BROWSE,
-    webMemory: []
+    webMemory: [],
+    screenObservations: []
   }
 
   const sendUpdate = () => {
@@ -272,6 +316,42 @@ export async function runAgent(
       }
       console.log(`[Agent] 最终 action=${plan.action}, browseCount=${ctx.browseCount}`)
 
+      // ── 观察真实屏幕（只在命令/网页信息不够时使用） ──
+      if (plan.action === 'observe_screen') {
+        ctx.state = 'observing'
+        step.command = '观察当前真实屏幕'
+        step.level = 'safe'
+        ctx.steps.push(step)
+        sendUpdate()
+
+        try {
+          const recentHistory = ctx.steps
+            .slice(-6)
+            .map((item) => `步骤${item.id}: ${item.command}\n${item.output.slice(0, 600)}`)
+            .join('\n\n')
+          const observation = await observeDesktopWithVision(ctx.task, recentHistory)
+          const output = [
+            `屏幕状态：${observation.summary}`,
+            observation.visibleApps.length ? `可见应用：${observation.visibleApps.join('、')}` : '',
+            observation.visibleText.length ? `可见文字：${observation.visibleText.join('；')}` : '',
+            observation.actionableItems.length
+              ? `可操作项：${observation.actionableItems.join('；')}`
+              : '',
+            `下一步建议：${observation.nextSuggestion}`
+          ]
+            .filter(Boolean)
+            .join('\n')
+          ctx.screenObservations.push(output)
+          step.output = output
+          step.status = 'done'
+        } catch (error) {
+          step.output = `观察屏幕失败: ${getErrorMessage(error)}`
+          step.status = 'error'
+        }
+        sendUpdate()
+        continue
+      }
+
       // ── 搜索网页 ──
       if (plan.action === 'search' && plan.query) {
         // 安全检查：拒绝不当搜索
@@ -304,8 +384,8 @@ export async function runAgent(
           const summary = await summarizeResults(plan.query, rawText)
           step.output = summary
           step.status = 'done'
-        } catch (err: any) {
-          step.output = `搜索失败: ${err.message}`
+        } catch (error) {
+          step.output = `搜索失败: ${getErrorMessage(error)}`
           step.status = 'error'
         }
         sendUpdate()
@@ -330,8 +410,8 @@ export async function runAgent(
           const summary = await summarizeResults(plan.url, rawText)
           step.output = summary
           step.status = 'done'
-        } catch (err: any) {
-          step.output = `打开失败: ${err.message}`
+        } catch (error) {
+          step.output = `打开失败: ${getErrorMessage(error)}`
           step.status = 'error'
         }
         sendUpdate()
@@ -386,9 +466,9 @@ export async function runAgent(
     ctx.state = 'done'
     sendUpdate()
     return { success: true, steps: ctx.steps }
-  } catch (error: any) {
+  } catch (error) {
     ctx.state = 'error'
     sendUpdate()
-    return { success: false, steps: ctx.steps, error: error.message }
+    return { success: false, steps: ctx.steps, error: getErrorMessage(error) }
   }
 }
