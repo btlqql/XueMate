@@ -24,9 +24,12 @@ interface AgentRagStats {
   chunkCount: number
 }
 
-interface AgentRagRetrieveResult {
+interface AgentRagContextPayload {
   query: string
+  collectionId: string
+  stats: AgentRagStats
   count: number
+  topScore: number
   results: RetrieveResult[]
   context: string
 }
@@ -48,32 +51,25 @@ async function retrieveViaMcp(
   query: string,
   options: AgentRagContextOptions
 ): Promise<AgentRagContextResult> {
-  const statsResult = await callAgentToolViaRs<AgentRagStats>('rag.stats', {
-    collectionId: options.collectionId
-  })
-  const stats = statsResult.data
-  if (stats.chunkCount <= 0) return emptyRagContext('empty')
-
-  const retrieveResult = await callAgentToolViaRs<AgentRagRetrieveResult>('rag.retrieve', {
+  const result = await callAgentToolViaRs<AgentRagContextPayload>('agent.ragContext', {
     query,
     collectionId: options.collectionId,
     topK: options.topK,
     candidateK: options.candidateK,
     minScore: options.minScore,
+    minInjectScore: options.minInjectScore,
     useMmr: true,
-    includeContext: true,
+    includeResults: false,
     maxChars: options.maxChars || 3600,
     title: options.title
   })
-  const mcpResult = retrieveResult.data
-  const localTopScore = mcpResult.results[0]?.score || 0
+  const mcpResult = result.data
+  if (mcpResult.stats.chunkCount <= 0) return emptyRagContext('empty')
+
   return {
-    context:
-      mcpResult.results.length > 0 && localTopScore > options.minInjectScore
-        ? mcpResult.context
-        : '',
-    localCount: mcpResult.results.length,
-    localTopScore,
+    context: mcpResult.context,
+    localCount: mcpResult.count,
+    localTopScore: mcpResult.topScore,
     source: 'mcp'
   }
 }

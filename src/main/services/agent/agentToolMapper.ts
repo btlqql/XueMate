@@ -6,6 +6,7 @@ export type AgentToolRoute =
   | 'rag.documents'
   | 'rag.stats'
   | 'rag.retrieve'
+  | 'agent.ragContext'
   | 'learningGraph.get'
   | 'memory.get'
   | 'quickSearch.run'
@@ -58,6 +59,12 @@ const AGENT_TOOL_DEFINITIONS: Record<AgentToolRoute, AgentToolDefinition> = {
   'rag.retrieve': {
     route: 'rag.retrieve',
     rsToolName: 'xuemate.rag.retrieve',
+    timeoutMs: 12000,
+    cacheable: true
+  },
+  'agent.ragContext': {
+    route: 'agent.ragContext',
+    rsToolName: 'xuemate.agent.ragContext',
     timeoutMs: 12000,
     cacheable: true
   },

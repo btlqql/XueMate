@@ -182,6 +182,10 @@ impl Gateway {
                 self.cached_post("/api/rag/retrieve", args, !no_cache)
                     .await?
             }
+            "xuemate.agent.ragContext" => {
+                self.cached_post("/api/agent/ragContext", args, !no_cache)
+                    .await?
+            }
             "xuemate.memory.get" => {
                 self.cached_get("/api/memory?includeSystemPrompt=1", !no_cache)
                     .await?
@@ -442,6 +446,23 @@ fn tools() -> Value {
                 ("useMmr", json!({ "type": "boolean", "default": true })),
                 ("includeContext", json!({ "type": "boolean", "default": true })),
                 ("maxChars", json!({ "type": "integer", "default": 3600, "minimum": 500, "maximum": 12000 })),
+                ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))
+            ]), vec!["query"])
+        },
+        {
+            "name": "xuemate.agent.ragContext",
+            "description": "内部 Agent 专用复合工具：一次调用完成 RAG 统计、检索和上下文拼接。",
+            "inputSchema": schema(map([
+                ("query", json!({ "type": "string" })),
+                ("collectionId", json!({ "type": "string", "default": "all" })),
+                ("topK", json!({ "type": "integer", "default": 4, "minimum": 1, "maximum": 20 })),
+                ("candidateK", json!({ "type": "integer", "default": 48, "minimum": 5, "maximum": 200 })),
+                ("minScore", json!({ "type": "number", "default": 0.16, "minimum": 0, "maximum": 1 })),
+                ("minInjectScore", json!({ "type": "number", "default": 0.24, "minimum": 0, "maximum": 1 })),
+                ("useMmr", json!({ "type": "boolean", "default": true })),
+                ("includeResults", json!({ "type": "boolean", "default": false })),
+                ("maxChars", json!({ "type": "integer", "default": 3600, "minimum": 500, "maximum": 12000 })),
+                ("title", json!({ "type": "string", "default": "以下是用户课程资料中的相关内容" })),
                 ("noCache", json!({ "type": "boolean", "default": false, "description": "跳过 Rust MCP Gateway 与 Electron bridge 本轮内存缓存。" }))
             ]), vec!["query"])
         },
