@@ -4,6 +4,7 @@ import ChatSidebar from '../components/ChatSidebar.vue'
 import ChatMessages from '../components/ChatMessages.vue'
 import ChatInput from '../components/ChatInput.vue'
 import LearningSignalsPanel from '../components/LearningSignalsPanel.vue'
+import { ragClient } from '../services/ragClient'
 
 const props = defineProps({
   currentRoute: { type: [String, Object], default: '' },
@@ -139,7 +140,7 @@ const loadConversations = async () => {
 // 加载资料夹
 const loadRagCollections = async () => {
   try {
-    const result = await window.rag.collections()
+    const result = await ragClient.collections()
     if (result.success) {
       ragCollections.value = result.data || []
     }

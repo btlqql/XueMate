@@ -89,6 +89,7 @@ const SAFE_COMMANDS = new Set([
   'sw_vers',
   'hostname',
   'ps',
+  'lsof',
   'top',
   'uptime',
   'free',
@@ -191,7 +192,11 @@ export function classifyCommand(cmd: string): { level: CommandLevel; reason: str
   if (CONFIRM_COMMANDS.has(mainCmd)) {
     // git 的只读子命令自动放行
     if (mainCmd === 'git') {
-      const subCmd = trimmed.split(/\s+/)[1] || ''
+      const parts = trimmed.split(/\s+/)
+      let subCmd = parts[1] || ''
+      if (subCmd === '-C' && parts.length >= 4) {
+        subCmd = parts[3] || ''
+      }
       const gitSafe = ['status', 'log', 'diff', 'show', 'branch', 'remote', 'describe']
       if (gitSafe.includes(subCmd)) {
         return { level: 'safe', reason: 'Git 只读命令' }

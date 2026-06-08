@@ -1,6 +1,11 @@
 const BRIDGE_BASE = 'http://127.0.0.1:8788/api/rag'
 
+function hasBridgeRuntime() {
+  return typeof fetch === 'function'
+}
+
 function ipcRag() {
+  if (window.__XUEMATE_BROWSER_PREVIEW__ && hasBridgeRuntime()) return null
   return window.rag && typeof window.rag.collections === 'function' ? window.rag : null
 }
 
@@ -67,5 +72,12 @@ export const ragClient = {
   learningGraph(collectionId) {
     const api = ipcRag()
     return api ? api.learningGraph(collectionId) : bridgeGet('learningGraph', { collectionId })
+  },
+
+  learningGraphSummary(collectionId) {
+    const api = ipcRag()
+    return api && typeof api.learningGraphSummary === 'function'
+      ? api.learningGraphSummary(collectionId)
+      : bridgeGet('learningGraphSummary', { collectionId })
   }
 }

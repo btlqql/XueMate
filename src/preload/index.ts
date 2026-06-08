@@ -94,7 +94,9 @@ const ragAPI = {
   documents: (collectionId?: string) => ipcRenderer.invoke('rag:documents', collectionId),
   delete: (docId: string) => ipcRenderer.invoke('rag:delete', docId),
   stats: (collectionId?: string) => ipcRenderer.invoke('rag:stats', collectionId),
-  learningGraph: (collectionId?: string) => ipcRenderer.invoke('rag:learningGraph', collectionId)
+  learningGraph: (collectionId?: string) => ipcRenderer.invoke('rag:learningGraph', collectionId),
+  learningGraphSummary: (collectionId?: string) =>
+    ipcRenderer.invoke('rag:learningGraphSummary', collectionId)
 }
 
 const quickSearchAPI = {
