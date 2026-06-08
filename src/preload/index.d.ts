@@ -18,7 +18,7 @@ interface FileAPI {
 }
 
 interface AgentAPI {
-  start: (task: string) => Promise<{ success: boolean; error?: string }>
+  start: (task: string) => Promise<{ success: boolean; finalSummary?: string; error?: string }>
   stop: () => Promise<{ success: boolean }>
   confirmResult: (approved: boolean) => Promise<{ success: boolean }>
   onUpdate: (callback: (data: AgentUpdate) => void) => () => void
@@ -29,6 +29,8 @@ interface AgentUpdate {
   state?: string
   steps?: unknown[]
   stepCount?: number
+  maxSteps?: number
+  finalSummary?: string
   [key: string]: unknown
 }
 

@@ -40,7 +40,7 @@ const secondaryItems = [
   },
   {
     id: 'agent',
-    label: '网页资料',
+    label: '学习助手',
     target: { view: 'agent', mode: 'search' }
   }
 ]

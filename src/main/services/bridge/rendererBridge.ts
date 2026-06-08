@@ -15,6 +15,20 @@ import {
 let bridgeServer: Server | null = null
 const MAX_BODY_BYTES = 1024 * 1024
 
+function summarizeLearningGraph(collectionId?: string): {
+  stats: ReturnType<typeof buildLearningGraph>['stats']
+  topConcepts: string[]
+} {
+  const graph = buildLearningGraph(collectionId)
+  return {
+    stats: graph.stats,
+    topConcepts: graph.nodes
+      .filter((node) => node.type === 'concept' && node.label.trim())
+      .slice(0, 5)
+      .map((node) => node.label.trim())
+  }
+}
+
 function sendJson(res: http.ServerResponse, status: number, payload: unknown): void {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -128,6 +142,16 @@ export function startRendererBridge(port = 8788): void {
         const data = await withBridgeCache(
           bridgeCacheKey(req.method, pathWithSearch(url)),
           () => buildLearningGraph(collectionIdOf(url)),
+          { noCache: noCacheFromUrl(url) }
+        )
+        sendJson(res, 200, { success: true, data })
+        return
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/rag/learningGraphSummary') {
+        const data = await withBridgeCache(
+          bridgeCacheKey(req.method, pathWithSearch(url)),
+          () => summarizeLearningGraph(collectionIdOf(url)),
           { noCache: noCacheFromUrl(url) }
         )
         sendJson(res, 200, { success: true, data })

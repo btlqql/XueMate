@@ -1,6 +1,7 @@
 import { chat } from '../ai/llm'
 import { classifyCommand, execInSandbox, ensureSandbox } from './sandbox'
 import { fetchPage, searchAndFetch } from '../browser/webRuntime'
+import { observeDesktopWithVision } from './desktopVision'
 
 // 全局系统提示词
 const SYSTEM_PROMPT = `你是 XueMate 智能学习助手，面向中小学生。你的职责是帮助学生完成学习任务。
@@ -17,6 +18,8 @@ type AgentState =
   | 'thinking'
   | 'executing'
   | 'browsing'
+  | 'observing'
+  | 'summarizing'
   | 'waiting_confirm'
   | 'done'
   | 'error'
@@ -40,17 +43,51 @@ interface AgentContext {
   browseCount: number
   maxBrowse: number
   webMemory: string[]
+  screenObservations: string[]
+  finalSummary: string
 }
 
-const MAX_STEPS = 15
-const MAX_BROWSE = 3 // 最多浏览/搜索 3 次
+const MAX_STEPS = 24
+const MIN_CHECK_STEPS = 3
+const MAX_BROWSE = 5 // 最多浏览/搜索 5 次
 
 interface PlanResult {
   thinking: string
   command: string | null
-  action: 'shell' | 'search' | 'browse' | 'done'
+  action: 'shell' | 'search' | 'browse' | 'observe_screen' | 'done'
   query?: string
   url?: string
+}
+
+interface AgentUpdate {
+  state: AgentState
+  steps: AgentStep[]
+  stepCount: number
+  maxSteps: number
+  finalSummary?: string
+}
+
+function getErrorMessage(error: unknown, fallback = '未知错误'): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizePlanResult(value: unknown): PlanResult | null {
+  if (!isRecord(value)) return null
+  const action = typeof value.action === 'string' ? value.action : ''
+  if (!['shell', 'search', 'browse', 'observe_screen', 'done'].includes(action)) return null
+  return {
+    thinking: typeof value.thinking === 'string' ? value.thinking : '',
+    action: action as PlanResult['action'],
+    command: typeof value.command === 'string' ? value.command : null,
+    query: typeof value.query === 'string' ? value.query : undefined,
+    url: typeof value.url === 'string' ? value.url : undefined
+  }
 }
 
 // 校验 plan 是否完整有效
@@ -61,6 +98,8 @@ function validatePlan(plan: PlanResult): boolean {
       return !!plan.query
     case 'browse':
       return !!plan.url
+    case 'observe_screen':
+      return true
     case 'shell':
       return !!plan.command
     case 'done':
@@ -86,14 +125,21 @@ async function planNextStep(ctx: AgentContext): Promise<PlanResult> {
 
   const webContext =
     ctx.webMemory.length > 0 ? `\n已获取的网页信息：\n${ctx.webMemory.join('\n---\n')}` : ''
+  const screenContext =
+    ctx.screenObservations.length > 0
+      ? `\n已观察的屏幕状态：\n${ctx.screenObservations.join('\n---\n')}`
+      : ''
 
   const prompt = `你是一个智能助手，帮助用户在 macOS 上完成任务。你可以：
 1. 执行 shell 命令
 2. 搜索网页获取信息
 3. 打开指定网页提取内容
+4. 在命令行无法判断 GUI/弹窗/真实屏幕状态时，观察一次当前屏幕
 
 用户任务：${ctx.task}
+当前进度：已执行 ${ctx.stepCount}/${ctx.maxSteps} 步，至少需要完成 ${MIN_CHECK_STEPS} 轮有效检查后才能结束。
 ${webContext}
+${screenContext}
 
 已执行步骤：
 ${history || '（还没有执行任何步骤）'}
@@ -101,20 +147,22 @@ ${history || '（还没有执行任何步骤）'}
 请决定下一步操作。返回JSON格式：
 {
   "thinking": "你的分析和计划（简短）",
-  "action": "search 或 browse 或 shell 或 done",
+  "action": "search 或 browse 或 shell 或 observe_screen 或 done",
   "query": "搜索关键词（仅当 action=search 时需要）",
   "url": "要打开的网址（仅当 action=browse 时需要）",
   "command": "shell命令（仅当 action=shell 时需要，其他情况为null）"
 }
 
 规则：
-1. 需要查找信息时用 search
-2. 需要访问特定网页时用 browse
-3. 需要执行命令时用 shell
-4. 任务完成时用 done
-5. 一次只做一个操作
-6. 搜索/浏览最多 ${MAX_BROWSE} 次，已用 ${ctx.browseCount} 次，用完后必须用 shell 或 done
-7. 只返回JSON，不要其他文字`
+1. 默认优先用 shell，因为已有 sandbox 可以安全执行命令、读文件、查状态
+2. 需要查找公开学习资料时用 search
+3. 需要访问特定网页文本时用 browse
+4. 只有当 shell/search/browse 都无法判断 GUI、系统弹窗、真实窗口状态时，才用 observe_screen
+5. 不要过早结束：少于 ${MIN_CHECK_STEPS} 轮有效检查时，除非遇到安全阻断或用户停止，否则不要用 done
+6. 任务完成时用 done
+7. 一次只做一个操作
+8. 搜索/浏览最多 ${MAX_BROWSE} 次，已用 ${ctx.browseCount} 次，用完后必须用 shell 或 done
+9. 只返回JSON，不要其他文字`
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -136,29 +184,31 @@ ${history || '（还没有执行任何步骤）'}
         jsonStr = jsonMatch[0]
       }
 
-      const parsed = JSON.parse(jsonStr)
+      const parsedRaw: unknown = JSON.parse(jsonStr)
+      const parsedRecord = isRecord(parsedRaw) ? { ...parsedRaw } : {}
 
       // 兼容各种格式：推断 action
-      if (!parsed.action) {
-        if (parsed.done === true) {
-          parsed.action = 'done'
-        } else if (parsed.query) {
-          parsed.action = 'search'
-        } else if (parsed.url) {
-          parsed.action = 'browse'
-        } else if (parsed.command) {
-          parsed.action = 'shell'
+      if (!parsedRecord.action) {
+        if (parsedRecord.done === true) {
+          parsedRecord.action = 'done'
+        } else if (parsedRecord.query) {
+          parsedRecord.action = 'search'
+        } else if (parsedRecord.url) {
+          parsedRecord.action = 'browse'
+        } else if (parsedRecord.command) {
+          parsedRecord.action = 'shell'
         }
         // 不再默认 fallback 到 done
       }
+      const parsed = normalizePlanResult(parsedRecord)
 
       // 校验完整性：action 必须合法，且对应字段不能缺
-      if (validatePlan(parsed)) {
+      if (parsed && validatePlan(parsed)) {
         console.log('[Agent] 解析结果:', JSON.stringify(parsed))
         return parsed
       }
 
-      console.warn(`[Agent] plan 校验失败 (尝试 ${attempt + 1}):`, JSON.stringify(parsed))
+      console.warn(`[Agent] plan 校验失败 (尝试 ${attempt + 1}):`, JSON.stringify(parsedRecord))
     } catch (e) {
       console.error(`[Agent] JSON 解析失败 (尝试 ${attempt + 1}):`, e)
     }
@@ -203,12 +253,161 @@ export async function summarizeResults(query: string, rawText: string): Promise<
   return result.trim()
 }
 
+function countEffectiveSteps(ctx: AgentContext): number {
+  return ctx.steps.filter((step) => step.status === 'done' || step.status === 'error').length
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function buildStablePlan(ctx: AgentContext): PlanResult | null {
+  const commands = new Set(ctx.steps.map((step) => step.command))
+  const cwd = shellQuote(process.cwd())
+
+  if (!commands.has(`pwd && git -C ${cwd} rev-parse --show-toplevel 2>/dev/null || true`)) {
+    return {
+      thinking: '先确认当前项目位置和工作区，保证后面的判断有依据。',
+      action: 'shell',
+      command: `pwd && git -C ${cwd} rev-parse --show-toplevel 2>/dev/null || true`
+    }
+  }
+
+  if (!commands.has(`git -C ${cwd} status --short 2>/dev/null || true`)) {
+    return {
+      thinking: '查看当前文件改动，先把学习现场和提交状态摸清楚。',
+      action: 'shell',
+      command: `git -C ${cwd} status --short 2>/dev/null || true`
+    }
+  }
+
+  if (/启动|软件|页面|窗口|前端|端口|服务|localhost|闪退|运行/.test(ctx.task)) {
+    const command = `lsof -nP -iTCP:5174 -sTCP:LISTEN || true; lsof -nP -iTCP:8788 -sTCP:LISTEN || true; ps aux | rg 'electron-vite|Electron|vite' || true`
+    if (!commands.has(command)) {
+      return {
+        thinking: '检查本地端口和应用进程，判断软件是否真的跑起来。',
+        action: 'shell',
+        command
+      }
+    }
+  }
+
+  if (/构建|build|报错|失败|启动/.test(ctx.task)) {
+    const command = `cd ${cwd} && npm run build`
+    if (!commands.has(command)) {
+      return {
+        thinking: '用一次构建验证当前项目状态，比只看日志更稳定。',
+        action: 'shell',
+        command
+      }
+    }
+  }
+
+  return null
+}
+
+function buildFollowUpPlan(ctx: AgentContext): PlanResult {
+  const commands = new Set(ctx.steps.map((step) => step.command))
+  const cwd = shellQuote(process.cwd())
+
+  if (!commands.has('pwd')) {
+    return {
+      thinking: '先确认当前检查环境，避免只凭一次判断就结束。',
+      action: 'shell',
+      command: 'pwd'
+    }
+  }
+
+  if (!commands.has('ls -la')) {
+    return {
+      thinking: '继续查看基础目录结构，补齐现场信息。',
+      action: 'shell',
+      command: 'ls -la'
+    }
+  }
+
+  if (/启动|软件|页面|窗口|前端|端口|服务|localhost|闪退/.test(ctx.task)) {
+    if (!commands.has('ps aux')) {
+      return {
+        thinking: '检查当前进程状态，确认软件或开发服务是否仍在运行。',
+        action: 'shell',
+        command: 'ps aux'
+      }
+    }
+    if (ctx.screenObservations.length === 0) {
+      return {
+        thinking: '命令信息还不够确认窗口状态，补一次当前屏幕观察。',
+        action: 'observe_screen',
+        command: null
+      }
+    }
+  }
+
+  if (/提交|git|文件|缓存|不该提交/.test(ctx.task)) {
+    const command = `git -C ${cwd} status --short`
+    if (!commands.has(command)) {
+      return {
+        thinking: '继续检查项目提交状态，找出可能需要处理的文件。',
+        action: 'shell',
+        command
+      }
+    }
+  }
+
+  return {
+    thinking: '补一轮只读文件扫描，避免结论过早。',
+    action: 'shell',
+    command: 'find . -maxdepth 2 -type f'
+  }
+}
+
+async function summarizeAgentRun(ctx: AgentContext): Promise<string> {
+  const stepHistory = ctx.steps
+    .map((step) => {
+      const output = step.output.trim() ? step.output.slice(0, 1000) : '（无输出）'
+      return `#${step.id} ${step.thinking}\n操作：${step.command || '无'}\n状态：${step.status}\n结果：${output}`
+    })
+    .join('\n\n')
+
+  const prompt = `请你作为 XueMate 学习现场检查助手，对这次执行做最终总结。
+
+用户任务：${ctx.task}
+
+执行记录：
+${stepHistory || '（没有执行记录）'}
+
+已获取网页资料：
+${ctx.webMemory.join('\n---\n') || '（无）'}
+
+已观察屏幕：
+${ctx.screenObservations.join('\n---\n') || '（无）'}
+
+请用中文输出，结构固定为：
+1. 结论：一句话回答任务是否完成/目前判断
+2. 我检查了什么：列 2-5 个证据点
+3. 发现的问题：没有就写“暂未发现明确问题”
+4. 下一步建议：给用户 1-3 个可执行动作
+
+要求：不要编造没有执行过的结果；如果证据不足，要明确说还差什么。`
+
+  const result = await chat({
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.2,
+    maxTokens: 700
+  })
+
+  return result.trim()
+}
+
 export async function runAgent(
   task: string,
-  onUpdate: (data: any) => void,
+  onUpdate: (data: AgentUpdate) => void,
   onConfirm: (command: string, reason: string) => Promise<boolean>,
   shouldStop?: () => boolean
-): Promise<{ success: boolean; steps: AgentStep[]; error?: string }> {
+): Promise<{ success: boolean; steps: AgentStep[]; finalSummary?: string; error?: string }> {
   ensureSandbox()
 
   const ctx: AgentContext = {
@@ -219,14 +418,18 @@ export async function runAgent(
     maxSteps: MAX_STEPS,
     browseCount: 0,
     maxBrowse: MAX_BROWSE,
-    webMemory: []
+    webMemory: [],
+    screenObservations: [],
+    finalSummary: ''
   }
 
   const sendUpdate = () => {
     onUpdate({
       state: ctx.state,
       steps: ctx.steps.map((s) => ({ ...s })),
-      stepCount: ctx.stepCount
+      stepCount: ctx.stepCount,
+      maxSteps: ctx.maxSteps,
+      finalSummary: ctx.finalSummary || undefined
     })
   }
 
@@ -241,15 +444,28 @@ export async function runAgent(
       ctx.state = 'thinking'
       sendUpdate()
 
-      const plan = await planNextStep(ctx)
+      const stablePlan = buildStablePlan(ctx)
+      const plan = stablePlan || (await planNextStep(ctx))
       console.log(
         `[Agent] 步骤 ${ctx.stepCount + 1}: action=${plan.action}, command=${plan.command}, query=${plan.query}, url=${plan.url}`
       )
 
       if (plan.action === 'done') {
-        ctx.state = 'done'
-        sendUpdate()
-        return { success: true, steps: ctx.steps }
+        if (countEffectiveSteps(ctx) < MIN_CHECK_STEPS) {
+          const followUpPlan = buildFollowUpPlan(ctx)
+          plan.thinking = followUpPlan.thinking
+          plan.action = followUpPlan.action
+          plan.command = followUpPlan.command
+          plan.query = followUpPlan.query
+          plan.url = followUpPlan.url
+        } else {
+          ctx.state = 'summarizing'
+          sendUpdate()
+          ctx.finalSummary = await summarizeAgentRun(ctx)
+          ctx.state = 'done'
+          sendUpdate()
+          return { success: true, steps: ctx.steps, finalSummary: ctx.finalSummary }
+        }
       }
 
       ctx.stepCount++
@@ -271,6 +487,42 @@ export async function runAgent(
         }
       }
       console.log(`[Agent] 最终 action=${plan.action}, browseCount=${ctx.browseCount}`)
+
+      // ── 观察真实屏幕（只在命令/网页信息不够时使用） ──
+      if (plan.action === 'observe_screen') {
+        ctx.state = 'observing'
+        step.command = '观察当前真实屏幕'
+        step.level = 'safe'
+        ctx.steps.push(step)
+        sendUpdate()
+
+        try {
+          const recentHistory = ctx.steps
+            .slice(-6)
+            .map((item) => `步骤${item.id}: ${item.command}\n${item.output.slice(0, 600)}`)
+            .join('\n\n')
+          const observation = await observeDesktopWithVision(ctx.task, recentHistory)
+          const output = [
+            `屏幕状态：${observation.summary}`,
+            observation.visibleApps.length ? `可见应用：${observation.visibleApps.join('、')}` : '',
+            observation.visibleText.length ? `可见文字：${observation.visibleText.join('；')}` : '',
+            observation.actionableItems.length
+              ? `可操作项：${observation.actionableItems.join('；')}`
+              : '',
+            `下一步建议：${observation.nextSuggestion}`
+          ]
+            .filter(Boolean)
+            .join('\n')
+          ctx.screenObservations.push(output)
+          step.output = output
+          step.status = 'done'
+        } catch (error) {
+          step.output = `观察屏幕失败: ${getErrorMessage(error)}`
+          step.status = 'error'
+        }
+        sendUpdate()
+        continue
+      }
 
       // ── 搜索网页 ──
       if (plan.action === 'search' && plan.query) {
@@ -304,8 +556,8 @@ export async function runAgent(
           const summary = await summarizeResults(plan.query, rawText)
           step.output = summary
           step.status = 'done'
-        } catch (err: any) {
-          step.output = `搜索失败: ${err.message}`
+        } catch (error) {
+          step.output = `搜索失败: ${getErrorMessage(error)}`
           step.status = 'error'
         }
         sendUpdate()
@@ -330,8 +582,8 @@ export async function runAgent(
           const summary = await summarizeResults(plan.url, rawText)
           step.output = summary
           step.status = 'done'
-        } catch (err: any) {
-          step.output = `打开失败: ${err.message}`
+        } catch (error) {
+          step.output = `打开失败: ${getErrorMessage(error)}`
           step.status = 'error'
         }
         sendUpdate()
@@ -383,12 +635,15 @@ export async function runAgent(
       sendUpdate()
     }
 
+    ctx.state = 'summarizing'
+    sendUpdate()
+    ctx.finalSummary = await summarizeAgentRun(ctx)
     ctx.state = 'done'
     sendUpdate()
-    return { success: true, steps: ctx.steps }
-  } catch (error: any) {
+    return { success: true, steps: ctx.steps, finalSummary: ctx.finalSummary }
+  } catch (error) {
     ctx.state = 'error'
     sendUpdate()
-    return { success: false, steps: ctx.steps, error: error.message }
+    return { success: false, steps: ctx.steps, error: getErrorMessage(error) }
   }
 }

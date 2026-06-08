@@ -68,6 +68,20 @@ interface ChatStreamEvent<T = unknown> {
   ts: number
 }
 
+function summarizeLearningGraph(collectionId?: string): {
+  stats: ReturnType<typeof buildLearningGraph>['stats']
+  topConcepts: string[]
+} {
+  const graph = buildLearningGraph(collectionId)
+  return {
+    stats: graph.stats,
+    topConcepts: graph.nodes
+      .filter((node) => node.type === 'concept' && node.label.trim())
+      .slice(0, 5)
+      .map((node) => node.label.trim())
+  }
+}
+
 function createChatRequestId(): string {
   return `chat_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
 }
@@ -708,6 +722,14 @@ function registerLLMHandlers(): void {
   ipcMain.handle('rag:learningGraph', async (_event, collectionId?: string) => {
     try {
       return { success: true, data: buildLearningGraph(collectionId) }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle('rag:learningGraphSummary', async (_event, collectionId?: string) => {
+    try {
+      return { success: true, data: summarizeLearningGraph(collectionId) }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

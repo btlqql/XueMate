@@ -1,9 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { searchSamples, useQuickSearch } from '../composables/useQuickSearch'
-import { controlSamples, stateLabel, useWebAssistant } from '../composables/useWebAssistant'
 import QuickSearchPanel from '../components/agent/QuickSearchPanel.vue'
-import WebAssistantPanel from '../components/agent/WebAssistantPanel.vue'
+import ComputerAgentPanel from '../components/agent/ComputerAgentPanel.vue'
 
 const props = defineProps({
   currentRoute: { type: Object, default: null },
@@ -12,7 +11,7 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const modeIds = ['search', 'control']
+const modeIds = ['search', 'computer']
 const activeMode = ref('search')
 const returnConversationId = ref('')
 
@@ -67,29 +66,6 @@ const {
   setSearchDraftPrompt
 } = useQuickSearch({ draftPrompt: resolveDraftPrompt() })
 
-const {
-  goalInput,
-  browserPreview,
-  running,
-  state,
-  steps,
-  screenshotSrc,
-  currentUrl,
-  currentTitle,
-  stepIndex,
-  maxSteps,
-  friendlyError,
-  error,
-  answer,
-  setBrowserBoxElement,
-  domElementCount,
-  domCandidates,
-  loadControlSample,
-  startAssistant,
-  stopAssistant,
-  clearControl
-} = useWebAssistant(activeMode)
-
 const preferredWebMaterial = computed(() => searchResult.value)
 const canReturnWebMaterialToChat = computed(() => Boolean(preferredWebMaterial.value))
 const returnToChatLabel = computed(() =>
@@ -115,6 +91,38 @@ function buildWebMaterialDraftPrompt() {
   const question = query || '刚才查到的网页资料'
 
   return `我刚补充查了「${question}」相关网页资料。${summaryText}${sourceText}\n\n请结合资料库和这些网页资料，用小学生能听懂的方式继续讲解，并给我下一步学习建议。`
+}
+
+function buildComputerResultDraftPrompt(result) {
+  const task = normalizeDraftPrompt(result?.task) || '刚才的学习现场检查'
+  const summary = normalizeDraftPrompt(result?.summary)
+  const stepLines = Array.isArray(result?.steps)
+    ? result.steps.slice(0, 6).map((step, index) => {
+        const title = normalizeDraftPrompt(step?.thinking) || `检查步骤 ${index + 1}`
+        const command = normalizeDraftPrompt(step?.command)
+        const status = normalizeDraftPrompt(step?.status)
+        return command
+          ? `${index + 1}. ${title}（${status}）：${command}`
+          : `${index + 1}. ${title}（${status}）`
+      })
+    : []
+  const stepsText = stepLines.length ? `\n检查过程：\n${stepLines.join('\n')}` : ''
+
+  return `我刚让 XueMate 检查了「${task}」。\n\n检查结论：\n${summary || '还没有形成明确结论。'}${stepsText}\n\n请把这次检查结果接回当前学习/项目问题里，先讲清楚原因，再告诉我下一步应该怎么做。`
+}
+
+function returnComputerResultToChat(result) {
+  const payload = {
+    collectionId: 'all',
+    draftPrompt: buildComputerResultDraftPrompt(result)
+  }
+  if (returnConversationId.value) {
+    payload.conversationId = returnConversationId.value
+  }
+  emit('navigate', {
+    view: 'chat',
+    payload
+  })
 }
 
 function returnWebMaterialToChat() {
@@ -163,8 +171,11 @@ watch(
 <template>
   <div class="fade-in agent-view">
     <div class="page-header">
-      <h1 class="page-title">网页资料</h1>
-      <p class="page-desc">当本地资料不够时，先找一版补充资料；复杂网页操作放到高级模式</p>
+      <h1 class="page-title">学习助手</h1>
+      <p class="page-desc">
+        资料不够时先补一版网页资料；遇到项目启动、文件提交、页面状态这类问题，让 XueMate
+        先检查文件和运行状态，必要时再看当前屏幕。
+      </p>
     </div>
 
     <div class="mode-tabs">
@@ -175,27 +186,27 @@ watch(
       >
         <span class="mode-icon">🔎</span>
         <span>
-          <strong>找网页资料</strong>
-          <small>先看一版整理结果</small>
+          <strong>补充网页资料</strong>
+          <small>先整理一版，再带回聊天</small>
         </span>
       </button>
       <button
         class="mode-tab"
-        :class="{ active: activeMode === 'control' }"
-        @click="activeMode = 'control'"
+        :class="{ active: activeMode === 'computer' }"
+        @click="activeMode = 'computer'"
       >
-        <span class="mode-icon">🖱️</span>
+        <span class="mode-icon">🖥️</span>
         <span>
-          <strong>网页助手（高级）</strong>
-          <small>打开网页后一步步处理</small>
+          <strong>检查学习现场</strong>
+          <small>先查文件和运行状态，必要时看屏幕</small>
         </span>
       </button>
     </div>
 
     <div class="web-return-card card" v-if="activeMode === 'search'">
       <div>
-        <strong>网页资料不是终点</strong>
-        <p>查到资料后，把摘要和来源带回问学伴，继续在原来的学习对话里讲清楚。</p>
+        <strong>资料要回到问题里</strong>
+        <p>查到资料后，把摘要和来源带回问学伴，继续围绕原来的学习问题讲清楚。</p>
       </div>
       <div class="web-return-actions">
         <button
@@ -229,32 +240,8 @@ watch(
       @return-chat="returnWebMaterialToChat"
     />
 
-    <!-- 网页助手 -->
-    <WebAssistantPanel
-      v-else
-      v-model:goalInput="goalInput"
-      :browser-preview="browserPreview"
-      :running="running"
-      :state="state"
-      :state-label="stateLabel"
-      :steps="steps"
-      :step-index="stepIndex"
-      :max-steps="maxSteps"
-      :screenshot-src="screenshotSrc"
-      :current-url="currentUrl"
-      :current-title="currentTitle"
-      :friendly-error="friendlyError"
-      :raw-error="error"
-      :answer="answer"
-      :control-samples="controlSamples"
-      :dom-candidates="domCandidates"
-      :dom-element-count="domElementCount"
-      :set-browser-box-element="setBrowserBoxElement"
-      @start="startAssistant"
-      @stop="stopAssistant"
-      @clear="clearControl"
-      @sample="loadControlSample"
-    />
+    <!-- 学习现场检查 -->
+    <ComputerAgentPanel v-else @return-chat="returnComputerResultToChat" />
   </div>
 </template>
 
