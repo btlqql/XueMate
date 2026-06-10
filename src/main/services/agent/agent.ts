@@ -130,7 +130,7 @@ async function planNextStep(ctx: AgentContext): Promise<PlanResult> {
       ? `\n已观察的屏幕状态：\n${ctx.screenObservations.join('\n---\n')}`
       : ''
 
-  const prompt = `你是一个智能助手，帮助用户在 macOS 上完成任务。你可以：
+  const prompt = `你是一个智能助手，帮助用户在 ${process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux'} 上完成任务。你可以：
 1. 执行 shell 命令
 2. 搜索网页获取信息
 3. 打开指定网页提取内容
@@ -258,47 +258,93 @@ function countEffectiveSteps(ctx: AgentContext): number {
 }
 
 function shellQuote(value: string): string {
+  if (process.platform === 'win32') {
+    // PowerShell: wrap in double quotes, escape inner double quotes
+    return `"${value.replace(/"/g, '\\"')}"`
+  }
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
 function buildStablePlan(ctx: AgentContext): PlanResult | null {
   const commands = new Set(ctx.steps.map((step) => step.command))
   const cwd = shellQuote(process.cwd())
+  const IS_WIN = process.platform === 'win32'
 
-  if (!commands.has(`pwd && git -C ${cwd} rev-parse --show-toplevel 2>/dev/null || true`)) {
-    return {
-      thinking: '先确认当前项目位置和工作区，保证后面的判断有依据。',
-      action: 'shell',
-      command: `pwd && git -C ${cwd} rev-parse --show-toplevel 2>/dev/null || true`
-    }
-  }
-
-  if (!commands.has(`git -C ${cwd} status --short 2>/dev/null || true`)) {
-    return {
-      thinking: '查看当前文件改动，先把学习现场和提交状态摸清楚。',
-      action: 'shell',
-      command: `git -C ${cwd} status --short 2>/dev/null || true`
-    }
-  }
-
-  if (/启动|软件|页面|窗口|前端|端口|服务|localhost|闪退|运行/.test(ctx.task)) {
-    const command = `lsof -nP -iTCP:5174 -sTCP:LISTEN || true; lsof -nP -iTCP:8788 -sTCP:LISTEN || true; ps aux | rg 'electron-vite|Electron|vite' || true`
-    if (!commands.has(command)) {
+  if (IS_WIN) {
+    if (!commands.has(`cd ${cwd} && git rev-parse --show-toplevel 2>$null; if ($LASTEXITCODE -ne 0) { echo n/a }`)) {
       return {
-        thinking: '检查本地端口和应用进程，判断软件是否真的跑起来。',
+        thinking: '先确认当前项目位置和工作区，保证后面的判断有依据。',
         action: 'shell',
-        command
+        command: `cd ${cwd} && git rev-parse --show-toplevel 2>$null; if ($LASTEXITCODE -ne 0) { echo n/a }`
       }
     }
-  }
 
-  if (/构建|build|报错|失败|启动/.test(ctx.task)) {
-    const command = `cd ${cwd} && npm run build`
-    if (!commands.has(command)) {
+    if (!commands.has(`git -C ${cwd} status --short 2>$null`)) {
       return {
-        thinking: '用一次构建验证当前项目状态，比只看日志更稳定。',
+        thinking: '查看当前文件改动，先把学习现场和提交状态摸清楚。',
         action: 'shell',
-        command
+        command: `git -C ${cwd} status --short 2>$null`
+      }
+    }
+
+    if (/启动|软件|页面|窗口|前端|端口|服务|localhost|闪退|运行/.test(ctx.task)) {
+      const command = `Get-NetTCPConnection -LocalPort 5174 -ErrorAction SilentlyContinue | Format-Table LocalPort,State; Get-NetTCPConnection -LocalPort 8788 -ErrorAction SilentlyContinue | Format-Table LocalPort,State; Get-Process | Where-Object { $_.ProcessName -match 'electron|vite' } | Format-Table ProcessName,Id`
+      if (!commands.has(command)) {
+        return {
+          thinking: '检查本地端口和应用进程，判断软件是否真的跑起来。',
+          action: 'shell',
+          command
+        }
+      }
+    }
+
+    if (/构建|build|报错|失败|启动/.test(ctx.task)) {
+      const command = `cd ${cwd}; npm run build`
+      if (!commands.has(command)) {
+        return {
+          thinking: '用一次构建验证当前项目状态，比只看日志更稳定。',
+          action: 'shell',
+          command
+        }
+      }
+    }
+  } else {
+    // Unix (macOS / Linux)
+    if (!commands.has(`pwd && git -C ${cwd} rev-parse --show-toplevel 2>/dev/null || true`)) {
+      return {
+        thinking: '先确认当前项目位置和工作区，保证后面的判断有依据。',
+        action: 'shell',
+        command: `pwd && git -C ${cwd} rev-parse --show-toplevel 2>/dev/null || true`
+      }
+    }
+
+    if (!commands.has(`git -C ${cwd} status --short 2>/dev/null || true`)) {
+      return {
+        thinking: '查看当前文件改动，先把学习现场和提交状态摸清楚。',
+        action: 'shell',
+        command: `git -C ${cwd} status --short 2>/dev/null || true`
+      }
+    }
+
+    if (/启动|软件|页面|窗口|前端|端口|服务|localhost|闪退|运行/.test(ctx.task)) {
+      const command = `lsof -nP -iTCP:5174 -sTCP:LISTEN || true; lsof -nP -iTCP:8788 -sTCP:LISTEN || true; ps aux | rg 'electron-vite|Electron|vite' || true`
+      if (!commands.has(command)) {
+        return {
+          thinking: '检查本地端口和应用进程，判断软件是否真的跑起来。',
+          action: 'shell',
+          command
+        }
+      }
+    }
+
+    if (/构建|build|报错|失败|启动/.test(ctx.task)) {
+      const command = `cd ${cwd} && npm run build`
+      if (!commands.has(command)) {
+        return {
+          thinking: '用一次构建验证当前项目状态，比只看日志更稳定。',
+          action: 'shell',
+          command
+        }
       }
     }
   }
@@ -309,29 +355,31 @@ function buildStablePlan(ctx: AgentContext): PlanResult | null {
 function buildFollowUpPlan(ctx: AgentContext): PlanResult {
   const commands = new Set(ctx.steps.map((step) => step.command))
   const cwd = shellQuote(process.cwd())
+  const IS_WIN = process.platform === 'win32'
 
-  if (!commands.has('pwd')) {
+  if (!commands.has(IS_WIN ? 'Get-Location' : 'pwd')) {
     return {
       thinking: '先确认当前检查环境，避免只凭一次判断就结束。',
       action: 'shell',
-      command: 'pwd'
+      command: IS_WIN ? 'Get-Location' : 'pwd'
     }
   }
 
-  if (!commands.has('ls -la')) {
+  if (!commands.has(IS_WIN ? 'Get-ChildItem' : 'ls -la')) {
     return {
       thinking: '继续查看基础目录结构，补齐现场信息。',
       action: 'shell',
-      command: 'ls -la'
+      command: IS_WIN ? 'Get-ChildItem' : 'ls -la'
     }
   }
 
   if (/启动|软件|页面|窗口|前端|端口|服务|localhost|闪退/.test(ctx.task)) {
-    if (!commands.has('ps aux')) {
+    const psCmd = IS_WIN ? "Get-Process | Format-Table ProcessName,Id" : 'ps aux'
+    if (!commands.has(psCmd)) {
       return {
         thinking: '检查当前进程状态，确认软件或开发服务是否仍在运行。',
         action: 'shell',
-        command: 'ps aux'
+        command: psCmd
       }
     }
     if (ctx.screenObservations.length === 0) {
@@ -357,7 +405,7 @@ function buildFollowUpPlan(ctx: AgentContext): PlanResult {
   return {
     thinking: '补一轮只读文件扫描，避免结论过早。',
     action: 'shell',
-    command: 'find . -maxdepth 2 -type f'
+    command: IS_WIN ? 'Get-ChildItem -Recurse -Depth 2 -File' : 'find . -maxdepth 2 -type f'
   }
 }
 

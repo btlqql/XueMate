@@ -1,4 +1,5 @@
-import { readFileSync, statSync } from 'fs'
+import { readFile } from 'fs/promises'
+import { statSync } from 'fs'
 import { basename } from 'path'
 import { PDFParse } from 'pdf-parse'
 
@@ -37,13 +38,13 @@ export async function extractTextFromFile(filePath: string): Promise<ExtractedDo
   let pageCount: number | undefined
 
   if (ext === 'pdf') {
-    const buffer = readFileSync(filePath)
+    const buffer = await readFile(filePath)
     const parser = new PDFParse({ data: buffer })
     const pdfData = await parser.getText()
     text = pdfData.text || ''
     pageCount = pdfData.pages ? pdfData.pages.length : 1
   } else if (SUPPORTED_TEXT_EXTS.has(ext)) {
-    text = readFileSync(filePath, 'utf-8')
+    text = await readFile(filePath, 'utf-8')
   } else {
     throw new Error(`不支持的文件格式: .${ext || 'unknown'}`)
   }

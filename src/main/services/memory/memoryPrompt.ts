@@ -20,7 +20,10 @@ export function buildSystemPrompt(memory: UserMemory): string {
     'sorting 步骤动作：compare(i,j,d), swap(i,j,r,d), sorted(i,d), done(r,d)。数组长度控制在 4-8。',
     '2. 步骤动画 type=steps/process：用于实验步骤、解题流程、科学过程、概念演示。',
     '格式示例：```animation\n{"type":"steps","title":"解题流程","data":{"steps":[{"title":"读题","desc":"圈出已知条件和目标"},{"title":"建模","desc":"把文字转成公式","items":["确定变量","列方程"]}]}}\n```',
-    '回答时先用文字解释，再给 animation JSON。JSON 必须合法，不能有注释、尾逗号、Markdown 列表。除非用户明确要求源码，否则禁止输出 ```svg。'
+    '3. 二叉树动画 type=tree/bst：用于二叉树、二叉搜索树的插入、查找、删除、遍历（前序/中序/后序/层序）。',
+    '格式示例：```animation\n{"type":"tree","title":"二叉搜索树插入","data":{"nodes":[50,30,70,20,40],"steps":[{"a":"visit","node":50,"d":"从根节点50开始"},{"a":"compare","node":30,"parent":50,"d":"30<50，进入左子树"},{"a":"insert","node":30,"parent":50,"side":"left","d":"插入30作为左子节点"},{"a":"done","d":"构建完成"}]}}\n```',
+    'tree 步骤动作：visit(node,d), compare(node,parent,d), insert(node,parent,side,d), found(node,d), notfound(d), traverse(path,d), swap(i,j,d), delete(node,d), done(d)。',
+    'nodes 按层序排列（如 [50,30,70,20,40] 表示根50、左子30、右子70、30的左20、30的右40）。遍历时用 traverse + path 数组。回答时先用文字解释，再给 animation JSON。JSON 必须合法，不能有注释、尾逗号、Markdown 列表。除非用户明确要求源码，否则禁止输出 ```svg。'
   ]
 
   // 新用户：提醒 AI 在回复末尾自然地询问基本信息
