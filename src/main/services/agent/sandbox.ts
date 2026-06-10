@@ -2,8 +2,12 @@ import { exec } from 'child_process'
 import { join, basename } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 
-// 沙箱目录
-const SANDBOX_DIR = join(process.env.HOME || '/tmp', 'XueMateSandbox')
+const IS_WIN = process.platform === 'win32'
+
+// 跨平台沙箱目录
+const SANDBOX_DIR = IS_WIN
+  ? join(process.env.APPDATA || process.env.USERPROFILE || 'C:\\', 'XueMateSandbox')
+  : join(process.env.HOME || '/tmp', 'XueMateSandbox')
 
 // 确保沙箱目录存在
 function ensureSandbox(): string {
@@ -218,7 +222,7 @@ export function classifyCommand(cmd: string): { level: CommandLevel; reason: str
   return { level: 'confirm', reason: '未知命令，需要确认' }
 }
 
-// 在沙箱中执行命令
+// 在沙箱中执行命令（跨平台）
 export function execInSandbox(
   command: string,
   options?: { cwd?: string; timeout?: number }
@@ -233,7 +237,7 @@ export function execInSandbox(
         cwd,
         timeout,
         maxBuffer: 1024 * 1024,
-        shell: '/bin/zsh',
+        shell: IS_WIN ? 'powershell.exe' : '/bin/zsh',
         env: { ...process.env, XM_SANDBOX: '1' }
       },
       (error, stdout, stderr) => {

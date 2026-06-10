@@ -1,5 +1,6 @@
 import { computed, nextTick, shallowRef, watch } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 export const suggestions = [
   '解释二叉树遍历',
@@ -15,6 +16,16 @@ export const quickEntries = [
 
 const ANIM_RE = /```animation\s*\n?([\s\S]*?)```/
 const OPEN_ANIM_BLOCK_RE = /```animation\s*\n?[\s\S]*$/
+
+// 安全渲染 Markdown：先解析再消毒，防止 XSS
+// FORBID_TAGS: style（防止 CSS 注入），form/input/button（防止表单钓鱼）
+function safeMd(text) {
+  const raw = marked.parse(text || '', { breaks: true })
+  return DOMPurify.sanitize(raw, {
+    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover']
+  })
+}
 
 export function useChatMessages(props, listRef) {
   const hasAssistantPlaceholder = computed(() => {
@@ -32,7 +43,7 @@ export function useChatMessages(props, listRef) {
     if (msgId && renderCache.has(msgId)) {
       return renderCache.get(msgId)
     }
-    const html = marked.parse(text || '', { breaks: true })
+    const html = safeMd(text)
     if (msgId) renderCache.set(msgId, html)
     return html
   }
@@ -48,7 +59,7 @@ export function useChatMessages(props, listRef) {
     renderTimer = setTimeout(() => {
       renderTimer = null
       const cleanContent = stripIncompleteSvg(pendingContent || '')
-      const html = marked.parse(cleanContent, { breaks: true })
+      const html = safeMd(cleanContent)
       renderCache.set(pendingMsgId, html)
       debouncedRender.value = html
     }, 80)
@@ -59,7 +70,7 @@ export function useChatMessages(props, listRef) {
     (val) => {
       if (!val && pendingMsgId) {
         const cleanContent = stripIncompleteSvg(pendingContent || '')
-        const html = marked.parse(cleanContent, { breaks: true })
+        const html = safeMd(cleanContent)
         renderCache.set(pendingMsgId, html)
         debouncedRender.value = html
         pendingMsgId = null
@@ -70,7 +81,7 @@ export function useChatMessages(props, listRef) {
 
   function getStreamingHtml(msg) {
     scheduleRender(msg.id, msg.content)
-    return debouncedRender.value || marked.parse(msg.content || '', { breaks: true })
+    return debouncedRender.value || safeMd(msg.content)
   }
 
   function hasAnimBlock(text) {
@@ -139,8 +150,14 @@ export function useChatMessages(props, listRef) {
 
   watch(
     () => props.messages.length,
-    () => {
-      renderCache.clear()
+    (newLen, oldLen) => {
+      // 只清除新增/变化消息的缓存，保留已渲染的旧消息
+      if (newLen > oldLen) {
+        // 新消息加入：旧缓存仍然有效，无需清除
+      } else {
+        // 消息被删除：全部重建
+        renderCache.clear()
+      }
       scrollToBottom()
     }
   )
